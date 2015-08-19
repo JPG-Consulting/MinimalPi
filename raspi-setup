@@ -1,0 +1,65 @@
+#!/bin/bash
+# First run initial setup
+
+ASK_TO_REBOOT=0
+
+do_configure_keyboard() {
+    dpkg-reconfigure keyboard-configuration &&
+    printf "Reloading keymap. This may take a short while\n" &&
+    invoke-rc.d keyboard-setup start
+}
+
+do_change_locale() {
+    dpkg-reconfigure locales
+}
+
+do_change_timezone() {
+    dpkg-reconfigure tzdata
+}
+
+do_change_hostname() {
+    whiptail --msgbox "\
+Please note: RFCs mandate that a hostname's labels \
+may contain only the ASCII letters 'a' through 'z' (case-insensitive), 
+the digits '0' through '9', and the hyphen.
+Hostname labels cannot begin or end with a hyphen. 
+No other symbols, punctuation characters, or blank spaces are permitted.\
+" 20 70 1
+
+    CURRENT_HOSTNAME=`cat /etc/hostname | tr -d " \t\n\r"`
+    NEW_HOSTNAME=$(whiptail --inputbox "Please enter a hostname" 20 60 "$CURRENT_HOSTNAME" 3>&1 1>&2 2>&3)
+    if [ $? -eq 0 ]; then
+        echo $NEW_HOSTNAME > /etc/hostname
+        sed -i "s/127.0.1.1.*$CURRENT_HOSTNAME/127.0.1.1\t$NEW_HOSTNAME/g" /etc/hosts
+        ASK_TO_REBOOT=1
+    fi
+}
+
+
+# Locales
+do_change_locale
+
+# Keyboard
+do_configure_keyboard
+
+# Timezone
+do_change_timezone
+
+# Hostname
+do_change_hostname
+
+# DHCP or Static IP address
+
+# Create user
+
+# Finish
+[ -e /etc/profile.d/raspi-setup.sh ] rm -f /etc/profile.d/raspi-setup.sh
+[ -e /raspi-setup ] rm -f /raspi-setup
+
+if [ $ASK_TO_REBOOT -eq 1 ]; then
+    whiptail --yesno "Would you like to reboot now?" 20 60 2
+    if [ $? -eq 0 ]; then # yes
+        sync
+        reboot
+    fi
+fi
