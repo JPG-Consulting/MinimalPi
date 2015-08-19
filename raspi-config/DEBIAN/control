@@ -1,10 +1,11 @@
-Package: raspi-config
+Package: minimalpi-raspi-config
 Architecture: all
-Source: raspi-config
+Source: minimalpi-raspi-config
 Version: 0.0.1
 Section: unknown
 Priority: extra
 Maintainer: Juan Pedro Gonzalez <opensource@jpg-consulting.com>
+Conflicts: raspi-config
 Build-Depends: debhelper (>= 8.0.0)
 Depends: parted,whiptail
 Standards-Version: 3.9.2
