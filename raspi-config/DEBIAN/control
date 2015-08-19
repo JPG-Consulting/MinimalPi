@@ -5,7 +5,7 @@ Section: unknown
 Priority: extra
 Maintainer: Juan Pedro Gonzalez <opensource@jpg-consulting.com>
 Build-Depends: debhelper (>= 8.0.0)
-Depends: ${misc:Depends}, whiptail
+Depends: parted,whiptail
 Standards-Version: 3.9.2
 Homepage: https://github.com/JPG-Consulting/MinimalPi
 Description: Simple configuration for Raspberry Pi
