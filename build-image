@@ -15,6 +15,11 @@ CHROOT_DIR="${BUILD_DIRECTORY}/rootfs"
 IMAGE_FILE=""
 TARGET_DEVICE=$1
 
+# MinimalPi
+#-----------------------------------------------------------
+MINIMALPI_GIT_URL="https://github.com/JPG-Consulting/MinimalPi.git"
+MINIMALPI_GIT_BRANCH="development"
+
 # Functions
 #-----------------------------------------------------------
 is_host_arm() {
@@ -185,10 +190,41 @@ fi
 
 # Prerequisites
 echo "Installing prerequisites."
-apt-get -y -qq install mount util-linux debootstrap parted e2fsprogs dosfstools git
+# build-essential devscripts debhelper => Needed to build deb packages.
+apt-get -y -qq install mount util-linux debootstrap parted e2fsprogs dosfstools git build-essential devscripts debhelper
 if is_host_arm; then
     apt-get -y -qq install qemu-user-static binfmt-support
 fi
+
+# Download MinimalPI
+if [ -d ${BUILD_DIRECTORY}/MinimalPi ]; then
+    if [ -d ${BUILD_DIRECTORY}/MinimalPi/.git ]; then
+        echo "Updating to latest MinimalPi"
+        cd ${BUILD_DIRECTORY}/MinimalPi
+        #git stash
+        git pull
+    else
+        echo "WARNING: MinimalPi directory exists but it is not a git repository."
+        echo "         Nothing done."
+    fi
+else
+    echo "Downloading latest MinimalPI"
+    cd ${BUILD_DIRECTORY}
+    git clone -b ${MINIMALPI_GIT_BRANCH} ${MINIMALPI_GIT_URL}
+    if [ $? -ne 0 ]; then
+        do_unmount_partitions
+        do_unset_partitions
+        echo "Error: failed to download firmware repository."
+        exit 1
+    fi
+fi
+
+# Build packages
+[ -d ${BUILD_DIRECTORY}/packages ] && rm -rf ${BUILD_DIRECTORY}/packages
+cd ${BUILD_DIRECTORY}/MinimalPi
+dpkg-deb --build raspi-config
+mv raspi-config.deb ${BUILD_DIRECTORY}/packages/
+
 
 # Download firmware
 if [ -d ${BUILD_DIRECTORY}/firmware ]; then
@@ -431,6 +467,12 @@ fi
 # Remove extra ttys (Save: ~3.5 MB RAM)
 sed -i '/[2-6]:23:respawn:\/sbin\/getty 38400 tty[2-6]/s%^%#%g' ${CHROOT_DIR}/etc/inittab
 sed -i '/T0:23:respawn:\/sbin\/getty -L ttyAMA0 115200 vt100/s%^%#%g' ${CHROOT_DIR}/etc/inittab
+
+# Install my custom packages
+[ ! -d ${CHROOT_DIR}/tmp/packages ] && mkdir ${CHROOT_DIR}/tmp/packages
+cp ${BUILD_DIRECTORY}/packages/*.deb ${CHROOT_DIR}/tmp/packages/
+[ -e ${CHROOT_DIR}/tmp/packages/raspi-config.deb ] && chroot ${CHROOT_DIR} dpkg -i /tmp/packages/raspi-config.deb
+rm -rf ${CHROOT_DIR}/tmp/packages
 
 # Chroot for customization
 # chroot ${CHROOT_DIR}
