@@ -1,6 +1,7 @@
 Package: raspi-config
 Architecture: all
 Source: raspi-config
+Version: 0.0.1
 Section: unknown
 Priority: extra
 Maintainer: Juan Pedro Gonzalez <opensource@jpg-consulting.com>
