@@ -1,12 +1,11 @@
+Package: raspi-config
+Architecture: all
 Source: raspi-config
 Section: unknown
 Priority: extra
 Maintainer: Juan Pedro Gonzalez <opensource@jpg-consulting.com>
 Build-Depends: debhelper (>= 8.0.0)
+Depends: ${misc:Depends}, whiptail
 Standards-Version: 3.9.2
 Homepage: https://github.com/JPG-Consulting/MinimalPi
-
-Package: raspi-config
-Architecture: all
-Depends: ${misc:Depends}, whiptail
 Description: Simple configuration for Raspberry Pi
