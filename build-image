@@ -222,8 +222,9 @@ do_create_partitions
 do_set_partitions
 
 # Format partitions
+# Boot partition must be FAT16 or FAT32. I choosed FAT32 as it is the most used by others.
 echo "Formatting ${BOOT_PARTITION}"
-mkfs.vfat -I ${BOOT_PARTITION} >& /dev/null
+mkfs.vfat -F 32 -n BOOT -I ${BOOT_PARTITION} >& /dev/null
 if [ $? -ne 0 ]; then
     echo "Error: Failed to format boot partition."
     do_unset_partitions
