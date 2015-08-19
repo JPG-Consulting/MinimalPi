@@ -1,0 +1,475 @@
+#!/bin/bash
+# A script to prepare and install a Raspbian system on a SD card.
+#
+
+# Debootstrap params
+#-----------------------------------------------------------
+MIRROR="http://mirrordirector.raspbian.org/raspbian"
+ARCH="armhf"
+RELEASE="wheezy"
+
+# Build environment
+#-----------------------------------------------------------
+BUILD_DIRECTORY="/root/rpi"
+CHROOT_DIR="${BUILD_DIRECTORY}/rootfs"
+IMAGE_FILE=""
+TARGET_DEVICE=$1
+
+# Functions
+#-----------------------------------------------------------
+is_host_arm() {
+    local host_arch=$(uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc64/ -e s/arm.*/arm/ -e s/sa110/arm/)
+
+    if [ "${host_arch}" = "arm" ]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+do_create_image()
+{
+    [ ! -d $BUILD_DIRECTORY ] && mkdir -p $BUILD_DIRECTORY
+
+    IMAGE_FILE="${BUILD_DIRECTORY}/$(date +%Y-%m-%d)-raspbian-basic-${RELEASE}.img"
+
+    echo "Creating image file ${IMAGE_FILE}."
+
+    #dd if=/dev/zero of=$IMAGE_FILE bs=512 count=1400000 >& /dev/null
+    dd if=/dev/zero of=$IMAGE_FILE bs=512 count=1000000 >& /dev/null
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to create image file ${image}."
+        exit 1
+    fi
+}
+
+do_create_partitions() {
+    local device=$TARGET_DEVICE
+
+    if [ -n "${IMAGE_FILE}" ]; then
+        device=$IMAGE_FILE
+    fi
+
+    echo "Creating partition table on ${device}."
+
+    fdisk $device << EOF >& /dev/null
+n
+p
+1
+ 
++64M
+t
+c
+n
+p
+2
+ 
+ 
+w
+EOF
+    if [ $? -ne 0 ]; then
+        echo "Error: failed to create partitions."
+        exit 1
+    fi
+}
+
+do_set_partitions() {
+    if [ -n "${IMAGE_FILE}" ]; then
+        echo "Setting up loop device."
+
+        TARGET_DEVICE=$(losetup -f --show ${IMAGE_FILE})
+		if [ $? -ne 0 ]; then
+            echo "Error: Failed to setup a loop device."
+            exit 1
+        elif [ -z "${TARGET_DEVICE}" ]; then
+            echo "Error: Failed to setup a loop device."
+            exit 1
+        fi
+
+        partx -a ${TARGET_DEVICE}
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to create loop device for partitions."
+            losetup -d ${TARGET_DEVICE}
+            exit 1
+        fi
+
+        BOOT_PARTITION=${TARGET_DEVICE}p1
+        ROOT_PARTITION=${TARGET_DEVICE}p2        
+    elif [ ! -b ${TARGET_DEVICE}1 ]; then
+        BOOT_PARTITION=${TARGET_DEVICE}p1
+        ROOT_PARTITION=${TARGET_DEVICE}p2
+
+        if [ ! -b ${BOOT_PARTITION} ]; then
+            echo "Error: Can't find boot partition, neither as ${TARGET_DEVICE}1, nor as ${TARGET_DEVICE}p1. Exiting."
+            exit 1
+        fi
+    else
+        BOOT_PARTITION=${TARGET_DEVICE}1
+        ROOT_PARTITION=${TARGET_DEVICE}2        
+    fi
+}
+
+do_unset_partitions() {
+    if [ -n "${IMAGE_FILE}" ]; then
+        partx -d ${ROOT_PARTITION}
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to delete loop device ${ROOT_PARTITION}."
+            partx -d ${BOOT_PARTITION}
+            losetup -d ${TARGET_DEVICE}
+            exit 1
+        fi
+
+        partx -d ${BOOT_PARTITION}
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to delete loop device ${BOOT_PARTITION}."
+            losetup -d ${TARGET_DEVICE}
+            exit 1
+        fi
+
+        losetup -d ${TARGET_DEVICE}
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to delete loop device ${DEVICE}."
+            exit 1
+        fi        
+    fi 
+}
+
+do_mount_partitions() {
+    echo "Mounting partitions."
+
+    [ ! -d ${CHROOT_DIR} ] && mkdir -p ${CHROOT_DIR}
+    mount ${ROOT_PARTITION} ${CHROOT_DIR}
+    if [ $? -ne 0 ]; then
+        do_unset_partitions
+        echo "Error: Unable to mount root partition ${ROOT_PARTITION} on ${CHROOT_DIR}."
+		exit 1
+    fi
+
+    [ ! -d ${CHROOT_DIR}/boot ] && mkdir -p ${CHROOT_DIR}/boot
+    mount ${BOOT_PARTITION} ${CHROOT_DIR}/boot
+    if [ $? -ne 0 ]; then
+		umount -l ${ROOT_PARTITION}
+        do_unset_partitions
+        echo "Error: Unable to mount boot partition ${BOOT_PARTITION} on ${CHROOT_DIR}/boot."
+		exit 1
+    fi
+}
+
+do_unmount_partitions() {
+    echo "Umounting partitions"
+
+    umount --force ${CHROOT_DIR}/boot
+    if [ $? -ne 0 ]; then
+        umount --force ${CHROOT_DIR}
+        do_unset_partitions
+        echo "Error: Unable to unmount boot partition ${CHROOT_DIR}/boot."
+		exit 1
+    fi
+
+    umount --force ${CHROOT_DIR}
+    if [ $? -ne 0 ]; then
+        do_unset_partitions
+        echo "Error: Unable to unmount root partition ${CHROOT_DIR}."
+		exit 1
+    fi
+}
+
+# Entry point
+#-----------------------------------------------------------
+
+# The script must be run as root
+if [ $EUID -ne 0 ]; then
+    echo "This tool must be run as root: # sudo $0" 1>&2
+    exit 1
+fi
+
+# Prerequisites
+echo "Installing prerequisites."
+apt-get -y -qq install mount util-linux debootstrap parted e2fsprogs dosfstools git
+if is_host_arm; then
+    apt-get -y -qq install qemu-user-static binfmt-support
+fi
+
+# Download firmware
+if [ -d ${BUILD_DIRECTORY}/firmware ]; then
+    if [ -d ${BUILD_DIRECTORY}/firmware/.git ]; then
+        echo "Updating to latest firmware"
+        cd ${BUILD_DIRECTORY}/firmware
+        #git stash
+        git pull
+	else
+		echo "WARNING: Firmware directory exists but it is not a git repository."
+		echo "         Nothing done."
+	fi
+else
+    echo "Downloading latest firmware"
+    cd ${BUILD_DIRECTORY}
+    git clone https://github.com/raspberrypi/firmware.git
+    if [ $? -ne 0 ]; then
+        do_unmount_partitions
+        do_unset_partitions
+        echo "Error: failed to download firmware repository."
+        exit 1
+    fi
+fi
+
+if [ -z "${TARGET_DEVICE}" ]; then
+    do_create_image
+fi
+
+do_create_partitions
+
+do_set_partitions
+
+# Format partitions
+echo "Formatting ${BOOT_PARTITION}"
+mkfs.vfat -I ${BOOT_PARTITION} >& /dev/null
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to format boot partition."
+    do_unset_partitions
+    exit 1
+fi
+
+# Format rootfs with ext4 but journaling disabled to achieve the least awful I/O-speed
+echo "Formatting ${ROOT_PARTITION}"
+mkfs.ext4 -L rootfs -O ^has_journal -E stride=2,stripe-width=1024 -b 4096 ${ROOT_PARTITION} >& /dev/null
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to format root partition."
+    do_unset_partitions
+    exit 1
+fi
+
+do_mount_partitions
+
+echo "Running debootstrap."
+debootstrap --no-check-gpg --foreign --arch=${ARCH} --variant=minbase ${RELEASE} ${CHROOT_DIR} ${MIRROR}
+if [ $? -ne 0 ]; then
+    do_unmount_partitions
+    do_unset_partitions
+    echo "Error: debootstrap failed on first stage."
+    exit 1
+fi
+
+if is_host_arm; then
+    cp /usr/bin/qemu-arm-static ${CHROOT_DIR}/usr/bin/
+    if [ $? -ne 0 ]; then
+        do_unmount_partitions
+        do_unset_partitions
+        echo "Error: Unable to copy /usr/bin/qemu-arm-static to ${CHROOT_DIR}/usr/bin/qemu-arm-static."
+        exit 1
+    fi
+fi
+
+# Before entering chroot we need to mount the following
+mount -o bind /dev ${CHROOT_DIR}/dev
+
+cp -R ${BUILD_DIRECTORY}/firmware/hardfp/opt/* ${CHROOT_DIR}/opt/
+[ ! -d ${CHROOT_DIR}/lib/modules/ ] && mkdir -p ${CHROOT_DIR}/lib/modules/
+cp -R ${BUILD_DIRECTORY}/firmware/modules/* ${CHROOT_DIR}/lib/modules/
+cp -R ${BUILD_DIRECTORY}/firmware/boot/* ${CHROOT_DIR}/boot/
+if [ $? -ne 0 ]; then
+    do_unmount_partitions
+    do_unset_partitions
+    echo "Error: Unable to copy boot files from firmware."
+    exit 1
+fi
+
+wget http://mirrordirector.raspbian.org/raspbian.public.key -O ${CHROOT_DIR}/raspbian.public.key
+if [ $? -ne 0 ]; then
+    do_unmount_partitions
+    do_unset_partitions
+    echo "Error: Unable to download raspbian public key."
+    exit 1
+fi
+
+# We are now ready for chroot
+LANG=C chroot ${CHROOT_DIR} /bin/bash <<EOF
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+EOF
+
+# apt is not installed until second-stage :(
+## Setup apt source.
+## debootstrap second-stage will use debian or repository not raspbian if 
+## this is not done before second-stage
+#cat <<EOF > ${CHROOT_DIR}/etc/apt/sources.list
+#deb ${MIRROR} ${RELEASE} main contrib non-free rpi
+## Uncomment line below then 'apt-get update' to enable 'apt-get source'
+##deb-src ${MIRROR} ${RELEASE} main contrib non-free rpi
+#EOF
+#chroot ${CHROOT_DIR} apt-get update
+
+# Proceed with second stage of debootstrap
+echo "Running debootstrap second stage."
+LANG=C chroot ${CHROOT_DIR} /debootstrap/debootstrap --second-stage
+if [ $? -ne 0 ]; then
+    do_unmount_partitions
+    do_unset_partitions
+    echo "Error: debootstrap second-stage failed."
+    exit 1
+fi
+
+# Setup apt source.
+# debootstrap second-stage will use debian or repository not raspbian if 
+# this is not done before second-stage
+cat <<EOF > ${CHROOT_DIR}/etc/apt/sources.list
+deb ${MIRROR} ${RELEASE} main contrib non-free rpi
+# Uncomment line below then 'apt-get update' to enable 'apt-get source'
+#deb-src ${MIRROR} ${RELEASE} main contrib non-free rpi
+EOF
+
+LANG=C chroot ${CHROOT_DIR} /bin/bash <<EOF
+[ -f /raspbian.public.key ] && apt-key add /raspbian.public.key
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get -y --force-yes install locales keyboard-configuration
+EOF
+
+# Setup networking
+echo "raspberrypi" > ${CHROOT_DIR}/etc/hostname
+
+if [ -e ${CHROOT_DIR}/etc/hosts ]; then
+    echo "127.0.1.1	raspberrypi" >> ${CHROOT_DIR}/etc/hosts
+else
+    cat <<EOF > ${CHROOT_DIR}/etc/hosts
+127.0.0.1	localhost
+127.0.1.1	raspberrypi
+# The following lines are desirable for IPv6 capable hosts
+::1		localhost ip6-localhost ip6-loopback
+ff02::1		ip6-allnodes
+ff02::2		ip6-allrouters
+EOF
+fi
+
+LANG=C chroot ${CHROOT_DIR} apt-get -y install isc-dhcp-client
+if [ $? -ne 0 ]; then
+    do_unmount_partitions
+    do_unset_partitions
+    echo "Error: Unable to install dhcp client."
+    exit 1
+fi
+
+cat <<EOF > ${CHROOT_DIR}/etc/network/interfaces
+auto lo
+iface lo inet loopback
+auto eth0
+iface eth0 inet dhcp
+EOF
+
+cat <<EOF > ${CHROOT_DIR}/etc/fstab
+proc            /proc           proc    defaults          0       0
+/dev/mmcblk0p1  /boot           vfat    defaults          0       2
+EOF
+
+# Write boot filesystem
+cat <<EOF > ${CHROOT_DIR}/boot/config.txt
+# For more options and information see
+# http://www.raspberrypi.org/documentation/configuration/config-txt.md
+# Some settings may impact device functionality. See link above for details
+# uncomment if you get no picture on HDMI for a default "safe" mode
+#hdmi_safe=1
+# uncomment this if your display has a black border of unused pixels visible
+# and your display can output without overscan
+#disable_overscan=1
+# uncomment the following to adjust overscan. Use positive numbers if console
+# goes off screen, and negative if there is too much border
+#overscan_left=16
+#overscan_right=16
+#overscan_top=16
+#overscan_bottom=16
+# uncomment to force a console size. By default it will be display's size minus
+# overscan.
+#framebuffer_width=1280
+#framebuffer_height=720
+# uncomment if hdmi display is not detected and composite is being output
+#hdmi_force_hotplug=1
+# uncomment to force a specific HDMI mode (this will force VGA)
+#hdmi_group=1
+#hdmi_mode=1
+# uncomment to force a HDMI mode rather than DVI. This can make audio work in
+# DMT (computer monitor) modes
+#hdmi_drive=2
+# uncomment to increase signal to HDMI, if you have interference, blanking, or
+# no display
+#config_hdmi_boost=4
+# uncomment for composite PAL
+#sdtv_mode=2
+#uncomment to overclock the arm. 700 MHz is the default.
+#arm_freq=800
+# Uncomment some or all of these to enable the optional hardware interfaces
+#dtparam=i2c_arm=on
+#dtparam=i2s=on
+#dtparam=spi=on
+# Uncomment this to enable the lirc-rpi module
+#dtoverlay=lirc-rpi
+# Additional overlays and parameters are documented /boot/overlays/README
+gpu_mem=16
+EOF
+
+echo "dwc_otg.lpm_enable=0 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait" > ${CHROOT_DIR}/boot/cmdline.txt
+
+# Create the user in the last step
+# We install dropbear as a lighter SSH Server
+chroot ${CHROOT_DIR} /bin/bash <<EOF
+DEBIAN_FRONTEND=noninteractive apt-get -y --force-yes install dropbear ntpdate sudo
+useradd --home /home/pi --create-home --shell /bin/bash --groups adm,dialout,cdrom,sudo,audio,video,plugdev,games,users --password raspberry pi
+echo -e "raspberry\nraspberry\n" | sudo passwd pi
+apt-get clean
+EOF
+
+# Sudo without password
+if [ -f ${CHROOT_DIR}/etc/sudoers ]; then
+    sed -i -E 's/^%sudo.+/%sudo ALL=(ALL) NOPASSWD: ALL/' ${CHROOT_DIR}/etc/sudoers
+fi
+
+# Dropbear configuration
+if [ -f ${CHROOT_DIR}/etc/default/dropbear ]; then
+    sed -i 's/NO_START=1/NO_START=0/g' ${CHROOT_DIR}/etc/default/dropbear
+    sed -i 's/DROPBEAR_EXTRA_ARGS=/DROPBEAR_EXTRA_ARGS="-w"/g' ${CHROOT_DIR}/etc/default/dropbear
+fi
+
+# Remove extra ttys (Save: ~3.5 MB RAM)
+sed -i '/[2-6]:23:respawn:\/sbin\/getty 38400 tty[2-6]/s%^%#%g' ${CHROOT_DIR}/etc/inittab
+sed -i '/T0:23:respawn:\/sbin\/getty -L ttyAMA0 115200 vt100/s%^%#%g' ${CHROOT_DIR}/etc/inittab
+
+# Chroot for customization
+# chroot ${CHROOT_DIR}
+
+# Post-chroot clenup
+chroot ${CHROOT_DIR} /bin/bash <<EOF
+umount --force /sys
+umount --force /proc
+EOF
+
+umount --force ${CHROOT_DIR}/dev
+
+[ -f ${CHROOT_DIR}/raspbian.public.key ] && rm ${CHROOT_DIR}/raspbian.public.key
+
+if is_host_arm; then
+    if [ -f ${CHROOT_DIR}/usr/bin/qemu-arm-static ]; then
+        rm ${CHROOT_DIR}/usr/bin/qemu-arm-static
+        if [ $? -ne 0 ]; then
+            do_unmount_partitions
+            do_unset_partitions
+            echo "Error: Unable to delete ${CHROOT_DIR}/usr/bin/qemu-arm-static."
+            exit 1
+        fi
+    fi
+fi
+
+# Finally
+echo "Cleaning loop devices."
+do_unmount_partitions
+do_unset_partitions
+
+echo
+echo -e "\033[32m   .~~.   .~~.\033[0m"
+echo -e "\033[32m  '. \ ' ' / .'\033[0m"
+echo -e "\033[31m   .~ .~~~..~.\033[0m"
+echo -e "\033[31m  : .~.'~'.~. :\033[0m     The system is now ready!"
+echo -e "\033[31m ~ (   ) (   ) ~\033[0m"
+echo -e "\033[31m( : '~'.~.'~' : )\033[0m"
+echo -e "\033[31m ~ .~ (   ) ~. ~\033[0m"
+echo -e "\033[31m  (  : '~' :  )\033[0m"
+echo -e "\033[31m   '~ .~~~. ~'\033[0m"
+echo -n -e "\033[31m       '~'          \033[0m"
+echo
