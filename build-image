@@ -196,10 +196,6 @@ if is_host_arm; then
     apt-get -y -qq install qemu-user-static binfmt-support
 fi
 
-echo "Downloading package list."
-[ -e ${BUILD_DIRECTORY}/Packages ] && rm ${BUILD_DIRECTORY}/Packages
-wget ${MIRROR}/dists/${RELEASE}/main/binary-${ARCH}/Packages -O ${BUILD_DIRECTORY}/Packages
-
 # Download MinimalPI
 if [ -d ${BUILD_DIRECTORY}/MinimalPi ]; then
     if [ -d ${BUILD_DIRECTORY}/MinimalPi/.git ]; then
@@ -472,10 +468,17 @@ fi
 sed -i '/[2-6]:23:respawn:\/sbin\/getty 38400 tty[2-6]/s%^%#%g' ${CHROOT_DIR}/etc/inittab
 sed -i '/T0:23:respawn:\/sbin\/getty -L ttyAMA0 115200 vt100/s%^%#%g' ${CHROOT_DIR}/etc/inittab
 
-# Install my custom packages
+# Copy my custom packages
+echo "Copy custom debian packages"
 [ ! -d ${CHROOT_DIR}/tmp/packages ] && mkdir ${CHROOT_DIR}/tmp/packages
 cp /tmp/raspi-packages/*.deb ${CHROOT_DIR}/var/cache/apt/archives/
 rm -rf /tmp/raspi-packages
+
+# Install raspi-config
+if [ -e ${CHROOT_DIR}/var/cache/apt/archives/raspi-config.deb ]; then 
+    chroot ${CHROOT_DIR} dpkg -i /var/cache/apt/archives/raspi-config.deb
+    rm ${CHROOT_DIR}/var/cache/apt/archives/raspi-config.deb
+fi
 
 # Chroot for customization
 # chroot ${CHROOT_DIR}
