@@ -34,11 +34,14 @@ do_network_setup_static() {
     network=$(printf "%d.%d.%d.%d" "$((i1 & m1))" "$((i2 & m2))" "$((i3 & m3))" "$((i4 &$
     broadcast=$(printf "%d.%d.%d.%d" "$((i1 | (255 ^ m1)))" "$((i2 | (255 ^ m2)))" "$((i$
 
-    echo "" > /etc/network/interfaces
+    echo "auto lo" > /etc/network/interfaces
+    echo "iface lo inet loopback" >> /etc/network/interfaces
     echo "" >> /etc/network/interfaces
     echo "" >> /etc/network/interfaces
     echo "" >> /etc/network/interfaces
-
+    echo "" >> /etc/network/interfaces
+    echo "" >> /etc/network/interfaces
+    echo "" >> /etc/network/interfaces
 
     cat <<EOF > /etc/network/interfaces
 auto lo
