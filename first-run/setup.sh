@@ -1,6 +1,42 @@
 #!/bin/bash
 
-do_network_setup_static() {
+prompt_yesno {
+  # usage: prompt_yesno prompt variable [default]
+  local prompt=$1
+  local variable=$2
+  local default=$3
+  local answer=""
+
+  case $default in
+    'y')  prompt="$prompt [Y/n] " ;;
+    'n')  prompt="$prompt [y/N] " ;;
+    *)    prompt="$prompt [y/n] " ;;
+  esac
+
+  while [[ $answer == "" ]]; do
+    read -r -p "$prompt" answer
+    answer=${answer,,} # tolower
+    
+    if [[ $answer =~ ^(yes|y) ]]; then
+      eval "$variable='y'"
+    elif [[ $answer =~ ^(no|n) ]]; then
+      eval "$variable='n'"
+    else
+      answer=$default
+    fi
+  done
+}
+
+setup_network_dhcp() {
+    # TODO: Install DHCP Client
+    echo "auto lo" > /etc/network/interfaces
+    echo "iface lo inet loopback" >> /etc/network/interfaces
+    echo "" >> /etc/network/interfaces
+    echo "auto eth0" >> /etc/network/interfaces
+    echo "iface eth0 inet dhcp" >> /etc/network/interfaces
+}
+
+setup_network_static() {
     local default_address="192.168.1.3"
     local default_netmask="255.255.255.0"
     local default_gateway="192.168.1.1"
@@ -52,4 +88,19 @@ do_network_setup_static() {
 
 WHIPTAIL=$(which whiptail)
 
-do_network_setup_static
+if [[ -n "${WHIPTAIL}" ]]; then
+    whiptail --yesno "Use DHCP to configure your network?" 20 60 2
+    if [ $? -eq 0 ]; then # yes
+        setup_network_dhcp
+    else
+        setup_network_static
+    fi
+else
+    prompt_yesno "Use DHCP to configure your network?" resp Y
+    if [[ $resp == 'y' ]]; then
+        setup_network_dhcp
+    else
+        setup_network_static
+    fi
+fi
+
