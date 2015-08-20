@@ -31,30 +31,23 @@ do_network_setup_static() {
         fi
     fi
 
-    network=$(printf "%d.%d.%d.%d" "$((i1 & m1))" "$((i2 & m2))" "$((i3 & m3))" "$((i4 &$
-    broadcast=$(printf "%d.%d.%d.%d" "$((i1 | (255 ^ m1)))" "$((i2 | (255 ^ m2)))" "$((i$
+    network=$(printf "%d.%d.%d.%d" "$((i1 & m1))" "$((i2 & m2))" "$((i3 & m3))" "$((i4 & m4))")
+    broadcast=$(printf "%d.%d.%d.%d" "$((i1 | (255 ^ m1)))" "$((i2 | (255 ^ m2)))" "$((i3 | (255 ^ m3)))" "$((i4 | (255 ^ m4)))")
 
     echo "auto lo" > /etc/network/interfaces
     echo "iface lo inet loopback" >> /etc/network/interfaces
     echo "" >> /etc/network/interfaces
-    echo "" >> /etc/network/interfaces
-    echo "" >> /etc/network/interfaces
-    echo "" >> /etc/network/interfaces
-    echo "" >> /etc/network/interfaces
-    echo "" >> /etc/network/interfaces
-
-    cat <<EOF > /etc/network/interfaces
-auto lo
-iface lo inet loopback
-
-auto eth0
-iface eth0 inet static
-  address ${address}
-  netmask ${netmask}
-  gateway ${gateway}
- network 192.168.1.0
- broadcast 192.168.1.255
-EOF
+    echo "auto eth0" >> /etc/network/interfaces
+    echo "iface eth0 inet static" >> /etc/network/interfaces
+    echo "  address ${address}" >> /etc/network/interfaces
+    echo "  netmask ${netmask}" >> /etc/network/interfaces
+    echo "  gateway ${gateway}" >> /etc/network/interfaces
+    if [ -n "${network}" ]; then
+        echo "  network ${network}" >> /etc/network/interfaces
+    fi
+    if [ -n "${broadcast}" ]; then
+        echo "  broadast ${broadcast}" >> /etc/network/interfaces
+    fi
 }
 
 WHIPTAIL=$(which whiptail)
