@@ -1,5 +1,7 @@
 #!/bin/bash
 
+PACKAGES=( "sudo" )
+
 #--------------------------------------------------------------------
 # Application entry point
 #--------------------------------------------------------------------
@@ -85,3 +87,77 @@ if [ ! -d ${BUILD_DIRECTORY}/firmware ]; then
     fi
 fi
 
+#--------------------------------------------------------------------
+# Choose a debootstrap suite
+#--------------------------------------------------------------------
+if [ -n "$DIALOG" ]; then
+    SUITE=$(${DIALOG} --backtitle "${BACKTITLE}" --title "Raspbian Release Selection" --menu "Choose your Raspbian release" 15 60 4 \
+        "wheezy" "Old stable release" \
+        "jeesie" "Current stable release" \
+        "stretch" "Current testing release" \
+        3>&1 1>&2 2>&3)
+else
+    echo 
+    echo "Raspbian Release Selection"
+    echo "=========================="
+    echo 
+    echo "Choose your Raspbian release:"
+    echo "  1) wheezy  - Old stable release"
+    echo "  2) jessie  - Current stable release"
+    echo "  3) stretch - Current testing release"
+    echo -n "Enter your choice: "
+    while true; do
+        read -n 1 -s SUITE;
+        case $debian_release in
+            1)
+                echo "${SUITE}"
+                SUITE="wheezy"
+                break;;
+            2)
+                echo "${SUITE}"
+                SUITE="jessie"
+                break;;
+            3)
+                echo "${SUITE}"
+                SUITE="stretch"
+                break;;
+            *)
+                SUITE="";;
+        esac
+    done
+fi
+
+#--------------------------------------------------------------------
+# Set a hostname
+#--------------------------------------------------------------------
+if [ -n "${DIALOG}" ]; then
+    HOSTNAME=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
+Please enter the hostname for this system.\n\n\
+The hostname is a single word that identifies your system to the \
+network. If you don't know what your hostname should be, consult \
+your network administrator. If you are setting up your own home \
+network, you can make something up here.\n\n\
+Hostname:
+" 20 60 "raspberrypi" 3>&1 1>&2 2>&3)
+    if [ $? -ne 0 ]; then
+        HOSTNAME="raspberrypi"
+    fi
+else
+    echo 
+    echo "Please enter the hostname for this system."
+    echo
+    echo "The hostname is a single word that identifies your system to the"
+    echo "network. If you don't know what your hostname should be, consult"
+    echo "your network administrator. If you are setting up your own home"
+    echo "network, you can make something up here."
+    echo
+    read -p "Hostname [raspberrypi]: " HOSTNAME
+fi
+
+if [ -z "${HOSTNAME}"]; then
+    HOSTNAME="raspberrypi"
+fi
+
+#--------------------------------------------------------------------
+# Set a system user
+#--------------------------------------------------------------------
