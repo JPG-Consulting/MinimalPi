@@ -1,6 +1,6 @@
 #!/bin/bash
 
-IMAGE_SIZE=400
+IMAGE_SIZE=500
 DEF_MIRROR="http://mirrordirector.raspbian.org/raspbian"
 ARCH="armhf"
 PACKAGES=( "sudo" "locales" "keyboard-configuration" )
@@ -877,7 +877,7 @@ EOF
 echo "dwc_otg.lpm_enable=0 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait" > ${CHROOT_DIR}/boot/cmdline.txt
 
 # Run custom setup script
-cp ${BUILD_DIRECTORY}/setup-files/first-stage ${CHROOT}/setup.sh
+cp ${BUILD_DIRECTORY}/setup-files/first-stage ${CHROOT_DIR}/setup.sh
 if [ $? -ne 0 ]; then
     if [ -n "${DIALOG}" ]; then
         ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to copy custom setup script." 20 60 2
