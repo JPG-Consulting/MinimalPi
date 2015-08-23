@@ -3,7 +3,7 @@
 IMAGE_SIZE=500
 DEF_MIRROR="http://mirrordirector.raspbian.org/raspbian"
 ARCH="armhf"
-PACKAGES=( "sudo" "locales" "keyboard-configuration" "ifupdown" )
+PACKAGES=( "sudo" "locales" "keyboard-configuration" "ntpdate" "ifupdown" )
 
 function install_dependencies() {
     local required="coreutils mount util-linux debootstrap parted e2fsprogs dosfstools git build-essential devscripts debhelper pv wget ca-certificates"
