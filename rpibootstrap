@@ -1,0 +1,697 @@
+#!/bin/bash
+# A script to prepare and install a Raspbian system on a SD card.
+#
+
+# Debootstrap params
+#-----------------------------------------------------------
+MIRROR="http://mirrordirector.raspbian.org/raspbian"
+ARCH="armhf"
+INCLUDE_PACKAGES=()
+
+# Image
+#-----------------------------------------------------------
+IMAGE_SIZE=400
+
+. common-functions.sh
+
+function do_welcome()
+{
+    local whiptail_bin=$(which whiptail)
+
+    if [ -z "${whiptail_bin}" ]; then
+        whiptail_bin=$(which dialog)
+    fi
+
+    if [ -n "${whiptail_bin}" ]; then
+        ${whiptail_bin} --msgbox "\
+Welcome to the Raspberry PI image creation program. 
+The install process is fairly straightforward, and 
+you should run through the options in the order they 
+are presented.
+" 20 70 1
+    else
+        echo "Raspberry PI Image Creator"
+        echo "=========================="
+        echo
+        echo "Welcome to the Raspberry PI image creation program."
+        echo "The install process is fairly straightforward, and "
+        echo "you should run through the options in the order they"
+        echo " are presented."
+        echo
+        read -n 1 -s -p "Press any key to continue..."
+    fi
+}
+
+function install_dependencies() {
+    local required="coreutils mount util-linux debootstrap parted e2fsprogs dosfstools git build-essential devscripts debhelper pv wget ca-certificates"
+    local to_install=()
+	
+    if ! is_host_arm; then
+        required="${required} qemu-user-static binfmt-support"
+    fi
+
+    for package in $required; do
+        if [ $(dpkg-query -W -f='${Status}' ${package} 2>/dev/null | grep -c "ok installed") -eq 0 ]; then
+            to_install+=( "${package}" )	
+        fi
+    done
+
+    if [ ${#to_install[@]} -ne 0 ]; then
+        echo "Installing dependencies."
+		apt-get -y -qq update
+        apt-get -y install ${to_install[@]}
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+    fi
+}
+
+do_create_partitions() {
+    local whiptail_bin=$(which whiptail)
+    local device=$1
+
+    if [ -z "${whiptail_bin}" ]; then
+        whiptail_bin=$(which dialog)
+    fi
+
+    echo "Creating partition table on ${device}."
+
+    fdisk $device << EOF >& /dev/null
+n
+p
+1
+ 
++64M
+t
+c
+n
+p
+2
+ 
+ 
+w
+EOF
+    if [ $? -ne 0 ]; then
+        if [ -n "${whiptail_bin}" ]; then
+            ${whiptail_bin} --msgbox "Failed to create partitions." 20 70 1
+        else
+            echo "Error: Failed to create partitions."
+        fi
+        return 1
+    fi
+
+    return 0
+}
+
+function do_format_partitions()
+{
+    local whiptail_bin=$(which whiptail)
+
+    # Boot partition must be FAT16 or FAT32. I choosed FAT32 as it is the most used by others.
+    echo "Formatting ${BOOT_PARTITION}"
+    mkfs.vfat -F 32 -n BOOT -I ${BOOT_PARTITION} >& /dev/null
+    if [ $? -ne 0 ]; then
+        if [ -n "${whiptail_bin}" ]; then
+            ${whiptail_bin} --msgbox "Failed to format boot partition." 20 70 1
+        else
+            echo "Error: Failed to format boot partition."
+        fi
+        do_unset_partitions
+        return 1
+    fi
+
+    # Format rootfs with ext4 but journaling disabled to achieve the least awful I/O-speed
+    echo "Formatting ${ROOT_PARTITION}"
+    mkfs.ext4 -L rootfs -O ^has_journal -E stride=2,stripe-width=1024 -b 4096 ${ROOT_PARTITION} >& /dev/null
+    if [ $? -ne 0 ]; then
+        if [ -n "${whiptail_bin}" ]; then
+            ${whiptail_bin} --msgbox "Failed to format root partition." 20 70 1
+        else
+            echo "Error: Failed to format root partition."
+        fi
+        return 1
+    fi
+}
+
+function image_create() {
+	local whiptail_bin=$(which whiptail)
+    local block_count=0
+	local image_size=$1
+	
+    if [ -z "${whiptail_bin}" ]; then
+        whiptail_bin=$(which dialog)
+    fi
+
+	block_count=$(( image_size * 1000000 / 512 ))
+
+    if [ -z "${IMAGE_FILE}" ]; then
+        if [ -z "${BUILD_DIRECTORY}" ]; then
+            BUILD_DIRECTORY="/root/rpi"
+            [ ! -d ${BUILD_DIRECTORY} ] && mkdir -p ${BUILD_DIRECTORY}
+        fi
+        IMAGE_FILE="${BUILD_DIRECTORY}/$(date +%Y-%m-%d)-raspbian-basic-${RELEASE}.img"
+    fi
+	
+    if [ -n "${whiptail_bin}" ]; then
+        (pv --size ${image_size}m -n /dev/zero | dd of="${IMAGE_FILE}" bs=512 count=${block_count}) 2>&1 | ${whiptail_bin} --backtitle "Creating image file" --gauge "Creating image file, please wait..." 10 70 0
+        if [ $? -ne 0 ]; then
+            ${whiptail_bin } --title "Error" --msgbox "Failed to create image file." 20 60 2
+			return 1
+        fi
+    else
+	    echo "Creating image file, please wait..."
+
+        pv --size ${image_size}m /dev/zero | dd of=$IMAGE_FILE bs=512 count=${block_count} >& /dev/null
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to create image file ${image}."
+            return 1
+        fi
+	fi
+
+    if ! do_create_partitions ${IMAGE_FILE}; then
+        return 1
+    fi
+
+    return 0
+}
+
+function do_debootstrap_release() {
+    local whiptail_bin=$(which whiptail)
+    local debian_release=""
+
+    if [ -z "${whiptail_bin}" ]; then
+        whiptail_bin=$(which dialog)
+    fi
+
+    if [ -n "$whiptail_bin" ]; then
+        debian_release=$(${whiptail_bin} --title "Raspbian Release Selection" --menu "Choose your Raspbian release" 15 60 4 \
+            "wheezy" "Old stable release" \
+            "jeesie" "Current stable release" \
+            "stretch" "Current testing release" \
+            3>&1 1>&2 2>&3)
+    else
+        echo 
+        echo "Raspbian Release Selection"
+        echo "=========================="
+        echo 
+        echo "Choose your Raspbian release:"
+        echo "  1) wheezy  - Old stable release"
+        echo "  2) jessie  - Current stable release"
+        echo "  3) stretch - Current testing release"
+        echo -n "Enter your choice: "
+        while true; do
+            read -n 1 -s debian_release;
+            case $debian_release in
+                1)
+                    echo "${debian_release}"
+                    debian_release="wheezy"
+                    break;;
+                2)
+                    echo "${debian_release}"
+                    debian_release="jessie"
+                    break;;
+                3)
+                    echo "${debian_release}"
+                    debian_release="stretch"
+                    break;;
+                *)
+                    debian_release="";;
+            esac
+        done
+	fi
+	
+	RELEASE="${debian_release}"
+	return 0
+}
+
+do_set_hostname() {
+    local whiptail_bin=$(which whiptail)
+    local new_hostname=""
+    local default_hostname="raspberrypi"
+
+    if [ -z "${whiptail_bin}" ]; then
+        whiptail_bin=$(which dialog)
+    fi
+
+    if [ -n "$whiptail_bin" ]; then
+        ${whiptail_bin} --msgbox "\
+Please note: RFCs mandate that a hostname's labels \
+may contain only the ASCII letters 'a' through 'z' (case-insensitive), \
+the digits '0' through '9', and the hyphen. \
+Hostname labels cannot begin or end with a hyphen. \ 
+No other symbols, punctuation characters, or blank spaces are permitted.\
+" 20 70 1
+
+        new_hostname=$(${whiptail_bin} --inputbox "\
+Please enter the hostname for this system.\n\n\
+The hostname is a single word that identifies your system to the \
+network. If you don't know what your hostname should be, consult \
+your network administrator. If you are setting up your own home \
+network, you can make something up here.\n\n\
+Hostname:
+" 20 60 "${default_hostname}" 3>&1 1>&2 2>&3)
+        if [ $? -ne 0 ]; then
+		    new_hostname="${default_hostname}"
+        fi
+    else
+        echo 
+        echo "Please enter the hostname for this system."
+        echo
+        echo "The hostname is a single word that identifies your system to the"
+        echo "network. If you don't know what your hostname should be, consult"
+        echo "your network administrator. If you are setting up your own home"
+        echo "network, you can make something up here."
+        echo
+        read -p "Hostname [${default_hostname}]: " new_hostname
+    fi
+
+    if [ -z "${new_hostname}"]; then
+        new_hostname="${default_hostname}"
+    fi
+
+    RASPBERRY_HOSTNAME="${new_hostname}"
+}
+
+do_add_user() {
+    local whiptail_bin=$(which whiptail)
+	local fullname=""
+    local username=""
+    local password=""
+	local password_confirm=""
+	local user_created=0
+	
+    if [ -z "${whiptail_bin}" ]; then
+        whiptail_bin=$(which dialog)
+    fi
+
+    if [ -n "$whiptail_bin" ]; then
+        fullname=$(${whiptail_bin} --inputbox "\
+A user account will be created for you to use instead of the root \
+account for non-adminitrative activities.\n\n \
+Please enter the real name of this user. This information will be \
+used for instance as default origin for emails sent by this user \
+as well as any program which displays or uses the user's real \
+name. Your full name is a reasonable choice.\n\n \
+Full name for the new user:
+" 20 60 "" 3>&1 1>&2 2>&3)
+        if [ $? -ne 0 ]; then
+            fullname=""
+        fi
+
+        while true; do
+            username=$(${whiptail_bin} --inputbox "\
+Select a username for the new account. Your first name is a reasonable \
+choice. The username should start with a lower-case letter, which can \
+be followed by any combination of numbers and more lower-case letters.\n\n \
+Username for your account: \
+" 20 60 "pi" 3>&1 1>&2 2>&3)
+            if [ $? -ne 0 ]; then
+                username="pi"
+            fi
+
+            while true; do
+                password=$(${whiptail_bin} --passwordbox "\
+A good password will contain a mixture of letters, numbers and \
+punctuation and should be changed at regular intervals.\n\n \
+Choose a password for the new user:" 20 60 3>&1 1>&2 2>&3)
+
+                if [ -n "${password}" ]; then
+                    password_confirm=$(${whiptail_bin} --passwordbox "\
+Please enter the same password again to verify you have \
+typed it correctly.\n\n \
+Re-enter password to verify: \
+" 20 60 3>&1 1>&2 2>&3)
+
+                    if [ "${password}" = "${password_confirm}" ]; then
+                        user_created=1
+                        break;
+                    else
+                        ${whiptail_bin } --title "Error" --msgbox "Passwords do not match." 20 60 2
+                    fi
+                else
+                    ${whiptail_bin } --title "Error" --msgbox "Password can not be empty." 20 60 2
+                fi
+            done
+
+            if [ $user_created -eq 1 ]; then
+                break
+            fi
+        done
+    else
+        echo 
+        echo "Set up users and passwords"
+        echo "=========================="
+        echo
+        echo "A user account will be created for you to use instead of the root"
+        echo "account for non-adminitrative activities."
+        echo 
+        echo "Please enter the real name of this user. This information will be"
+        echo "used for instance as default origin for emails sent by this user"
+        echo "as well as any program which displays or uses the user's real"
+        echo "name. Your full name is a reasonable choice."
+		echo 
+        read -p "Full name for the new user:" fullname
+
+        echo
+        echo "Select a username for the new account. Your first name is a reasonable"
+        echo "choice. The username should start with a lower-case letter, which can"
+        echo "be followed by any combination of numbers and more lower-case letters."
+		echo
+        read -p "Username for your account:" username
+
+        while true; do
+            echo
+            echo "A good password will contain a mixture of letters, numbers and"
+            echo "punctuation and should be changed at regular intervals."
+            echo
+            read -s -p "Choose a password for the new user:" password
+            echo
+
+            if [ -n "${password}" ]; then
+                echo 
+                echo "Please enter the same password again to verify you have"
+                echo "typed it correctly."
+                echo
+                read -s -p "Re-enter password to verify:" password_confirm
+                echo
+
+				if [ "${password}" = "${password_confirm}" ]; then
+                    user_created=1
+                    break;
+                else
+                    echo "Error: Passwords do not match."
+                fi
+            else
+                echo "Error: Password can not be empty."
+            fi
+        done
+    fi
+
+    # User configuration goes into third stage
+    if [ -z "${BUILD_DIRECTORY}" ]; then
+        BUILD_DIRECTORY="/root/rpi"
+        [ ! -d ${BUILD_DIRECTORY} ] && mkdir -p ${BUILD_DIRECTORY}
+    fi
+
+    [ ! -d ${BUILD_DIRECTORY}/debootstrap ] && mkdir -p ${BUILD_DIRECTORY}/debootstrap
+    [ ! -e ${BUILD_DIRECTORY}/debootstrap/thirdstage ] && echo "#!/bin/sh" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+
+    # Add the user
+    echo "useradd --create-home --shell /bin/bash --groups adm,dialout,cdrom,sudo,audio,video,plugdev,games,users ${username}" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+	echo "echo -e \"${password}\\n${password}\\n\" | sudo passwd ${username}" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+}
+
+# Some REFs
+#  http://www.raspberry-pi-geek.com/Archive/2013/01/Converting-the-Raspberry-Pi-to-a-wireless-print-server
+do_software_selection() {
+    local whiptail_bin=$(which whiptail)
+    
+    if [ -z "${whiptail_bin}" ]; then
+        whiptail_bin=$(which dialog)
+    fi
+
+    if [ -n "$whiptail_bin" ]; then
+        ${whiptail_bin} --title "Software Selection" --checklist "At the moment, only the core of the system will be installed. To tune the system to your needs, you can choose to install one or more of the following predifined collections of software.\n\nChoose software to install:" 20 78 15 \
+            "Desktop environment" "" off \
+            "SSH Server" "" on \
+            2>results
+
+        while read choice; do
+            case $choice in
+                Desktop environment)
+                    do_install_desktop_environment
+                    ;;
+                SSH Server)
+                    do_install_ssh_server
+                    ;;
+            esac
+        done < results
+    else
+        echo
+		echo "Software Selection"
+		echo "=================="
+		echo
+		echo "At the moment, only the core of the system will be installed."
+		echo "To tune the system to your needs, you can choose to install one"
+		echo "or more of the following predifined collections of software."
+		echo
+		
+        if prompt_yesno "Install desktop environment" n; then
+            do_install_desktop_environment
+        fi
+
+        if prompt_yesno "Install SSH server" y; then
+            do_install_ssh_server
+        fi
+    fi
+}
+
+do_install_desktop_environment() {
+    if [ -z "${BUILD_DIRECTORY}" ]; then
+        BUILD_DIRECTORY="/root/rpi"
+        [ ! -d ${BUILD_DIRECTORY} ] && mkdir -p ${BUILD_DIRECTORY}
+    fi
+
+    [ ! -d ${BUILD_DIRECTORY}/debootstrap ] && mkdir -p ${BUILD_DIRECTORY}/debootstrap
+    [ ! -e ${BUILD_DIRECTORY}/debootstrap/thirdstage ] && echo "#!/bin/sh" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+
+    # Install X
+    INCLUDE_PACKAGES+=( "xserver-xorg-core" "xserver-xorg-input-all" "xserver-xorg-video-fbdev" )
+    INCLUDE_PACKAGES+=( "lxde" "lxdm" )
+	
+	# Add more space to image
+	IMAGE_SIZE=$(( IMAGE_SIZE + 600 ))
+}
+
+do_install_ssh_server() {
+    if [ -z "${BUILD_DIRECTORY}" ]; then
+        BUILD_DIRECTORY="/root/rpi"
+        [ ! -d ${BUILD_DIRECTORY} ] && mkdir -p ${BUILD_DIRECTORY}
+    fi
+
+    [ ! -d ${BUILD_DIRECTORY}/debootstrap ] && mkdir -p ${BUILD_DIRECTORY}/debootstrap
+    [ ! -e ${BUILD_DIRECTORY}/debootstrap/thirdstage ] && echo "#!/bin/sh" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+
+    # Install dropbear SSH server
+    INCLUDE_PACKAGES+=( "dropbear" )
+
+    echo "sed -i 's/NO_START=1/NO_START=0/g' /etc/default/dropbear" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+    echo "sed -i 's/DROPBEAR_EXTRA_ARGS=/DROPBEAR_EXTRA_ARGS=\"-w\"/g' /etc/default/dropbear" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+}
+
+do_install_dhcp_client() {
+    if [ -z "${BUILD_DIRECTORY}" ]; then
+        BUILD_DIRECTORY="/root/rpi"
+        [ ! -d ${BUILD_DIRECTORY} ] && mkdir -p ${BUILD_DIRECTORY}
+    fi
+
+    [ ! -d ${BUILD_DIRECTORY}/debootstrap ] && mkdir -p ${BUILD_DIRECTORY}/debootstrap
+    [ ! -e ${BUILD_DIRECTORY}/debootstrap/thirdstage ] && echo "#!/bin/sh" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+
+    # Install DHCP client
+    echo "DEBIAN_FRONTEND=noninteractive apt-get -y --force-yes install isc-dhcp-client" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+}
+
+function run_debootstrap() {
+    local whiptail_bin=$(which whiptail)
+
+    if [ -z "${whiptail_bin}" ]; then
+        whiptail_bin=$(which dialog)
+    fi
+
+    echo "Running debootstrap."
+
+   # --include=alpha,beta
+
+    debootstrap --no-check-gpg --foreign --arch=${ARCH} --variant=minbase ${RELEASE} ${CHROOT_DIR} ${MIRROR}
+    if [ $? -ne 0 ]; then
+        if [ -n "${whiptail_bin}" ]; then
+            ${whiptail_bin } --title "Error" --msgbox "debootstrap failed on first stage." 20 60 2
+        else
+            echo "Error: debootstrap failed on first stage."
+        fi
+        return 1
+    fi
+
+    if ! is_host_arm; then
+        if [ -e /usr/bin/qemu-arm-static ]; then
+            cp /usr/bin/qemu-arm-static ${CHROOT_DIR}/usr/bin/
+            if [ $? -ne 0 ]; then
+                if [ -n "${whiptail_bin}" ]; then
+                    ${whiptail_bin } --title "Error" --msgbox "Unable to copy /usr/bin/qemu-arm-static to ${CHROOT_DIR}/usr/bin/qemu-arm-static." 20 60 2
+                else
+                    echo "Error: Unable to copy /usr/bin/qemu-arm-static to ${CHROOT_DIR}/usr/bin/qemu-arm-static."
+                fi
+                return 1
+            fi
+		else
+            if [ -n "${whiptail_bin}" ]; then
+                ${whiptail_bin } --title "Error" --msgbox "Missing file /usr/bin/qemu-arm-static." 20 60 2
+            else
+                echo "Error: Missing file /usr/bin/qemu-arm-static."
+            fi
+            return 1
+		fi
+    fi
+	
+	LANG=C chroot ${CHROOT_DIR} /debootstrap/debootstrap --second-stage
+    if [ $? -ne 0 ]; then
+        if [ -n "${whiptail_bin}" ]; then
+            ${whiptail_bin } --title "Error" --msgbox "debootstrap failed on second stage." 20 60 2
+        else
+            echo "Error: debootstrap failed on second stage."
+        fi
+        return 1
+    fi
+
+    # Set the hostname
+    if [ -z "${RASPBERRY_HOSTNAME}" ]; then
+        RASPBERRY_HOSTNAME="raspberrypi"
+    fi
+
+	echo ${RASPBERRY_HOSTNAME} > ${CHROOT_DIR}/etc/hostname
+
+    cat <<EOF > ${CHROOT_DIR}/etc/hosts
+127.0.0.1	localhost
+127.0.1.1	${RASPBERRY_HOSTNAME}
+EOF
+
+    # Run my custom setup script
+    if [ -e ${BUILD_DIRECTORY}/debootstrap/thirdstage.pre ]; then
+        chmod +x ${BUILD_DIRECTORY}/debootstrap/thirdstage.pre
+        ${BUILD_DIRECTORY}/debootstrap/thirdstage.pre
+        if [ $? -ne 0 ]; then
+            if [ -n "${whiptail_bin}" ]; then
+                ${whiptail_bin } --title "Error" --msgbox "Failed on third stage." 20 60 2
+            else
+                echo "Error: failed on third stage."
+            fi
+            return 1
+        fi
+    fi
+
+    if [ -e ${BUILD_DIRECTORY}/debootstrap/thirdstage ]; then
+        cp ${BUILD_DIRECTORY}/debootstrap/thirdstage ${CHROOT_DIR}/
+        chmod +x ${CHROOT_DIR}/thirdstage
+        LANG=C chroot ${CHROOT_DIR} /thirdstage
+        rm -f ${CHROOT_DIR}/thirdstage
+    fi
+
+    return 0
+}
+
+do_set_image_size() {
+    local whiptail_bin=$(which whiptail)
+    local temp_size=0
+    
+    if [ -z "${whiptail_bin}" ]; then
+        whiptail_bin=$(which dialog)
+    fi
+
+    while true; do
+        if [ -n "$whiptail_bin" ]; then
+	        temp_size=$(${whiptail_bin} --inputbox "Please enter the size of the new image file.\n\nImage file size:" 20 60 "${IMAGE_SIZE}" 3>&1 1>&2 2>&3)
+        else
+            echo
+            echo "Image file"
+            echo "=========="
+            echo
+            echo "Please enter the size of the new image file."
+	        echo
+            read -p "Image file size [${IMAGE_SIZE}]: " temp_size
+        fi
+
+        if [[ $temp_size =~ "^[0-9]+$" ]]; then
+            break
+        else
+            if [ -n "$whiptail_bin" ]; then
+                ${whiptail_bin } --title "Error" --msgbox "The image size must be numeric." 20 60 2
+            else
+                echo "Error: The image size must be numeric."
+            fi
+        fi
+    done
+	
+	IMAGE_SIZE="${temp_size}"
+}
+
+# The script must be run as root
+if [ $EUID -ne 0 ]; then
+    echo "This tool must be run as root: # sudo $0" 1>&2
+    exit 1
+fi
+
+do_welcome
+
+if [ -z "${BUILD_DIRECTORY}" ]; then
+    BUILD_DIRECTORY="/root/rpi"
+    [ ! -d ${BUILD_DIRECTORY} ] && mkdir -p ${BUILD_DIRECTORY}
+fi
+
+[ -d ${BUILD_DIRECTORY}/debootstrap ]; rm -rf ${BUILD_DIRECTORY}/debootstrap
+mkdir -p ${BUILD_DIRECTORY}/debootstrap
+echo "#!/bin/sh" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage.pre
+echo "#!/bin/sh" >> ${BUILD_DIRECTORY}/debootstrap/thirdstage
+	
+do_debootstrap_release
+
+do_set_hostname
+
+do_add_user
+
+do_set_image_size
+
+do_software_selection
+
+
+if ! install_dependencies; then
+    echo "Fatal Error: Unmet dependencies."
+    exit 1
+fi
+
+if ! image_create; then
+    echo "Fatal Error: Failed to create image."
+    exit 1
+fi
+
+if ! image_losetup; then
+    echo "Fatal Error: Failed to setup loop devices."
+    exit 1
+fi
+
+if ! do_format_partitions; then
+    image_losetup_detach
+    echo "Fatal Error: Failed to format partitions."
+    exit 1
+fi
+
+if ! mount_partitions; then
+    image_losetup_detach
+    echo "Fatal Error: Failed to mount partitions."
+    exit 1
+fi
+
+# Debootstrap
+if ! run_debootstrap; then
+    unmount_partitions
+	image_losetup_detach
+    echo "Fatal Error: Failed to run debootstrap."
+	exit 1
+fi
+
+# We are exiting, therefore show the errors but do not exit!
+unmount_partitions
+image_losetup_detach
+
+echo
+echo -e "\033[32m   .~~.   .~~.\033[0m"
+echo -e "\033[32m  '. \ ' ' / .'\033[0m"
+echo -e "\033[31m   .~ .~~~..~.\033[0m"
+echo -e "\033[31m  : .~.'~'.~. :\033[0m     The system is now ready!"
+echo -e "\033[31m ~ (   ) (   ) ~\033[0m"
+echo -e "\033[31m( : '~'.~.'~' : )\033[0m"
+echo -e "\033[31m ~ .~ (   ) ~. ~\033[0m"
+echo -e "\033[31m  (  : '~' :  )\033[0m"
+echo -e "\033[31m   '~ .~~~. ~'\033[0m"
+echo -n -e "\033[31m       '~'          \033[0m"
+echo
