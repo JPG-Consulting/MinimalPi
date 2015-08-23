@@ -600,12 +600,15 @@ else
 fi
 
 if [ ! -e ${IMAGE_FILE} ]; then
-    if [ -n "${DIALOG}" ]; then
-        ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Missing image file." 20 70 1
-    else
-        echo "Error: Missing image file."
+    dd if=/dev/zero of=${IMAGE_FILE} bs=512 count=${block_count} >& /dev/null
+    if [ $? -ne 0 ]; then
+        if [ -n "${DIALOG}" ]; then
+            ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to create image file." 20 70 1
+        else
+            echo "Error: Failed to create image file."
+        fi
+        exit 1
     fi
-    exit 1
 fi
 
 echo "Creating partition table."
