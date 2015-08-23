@@ -13,11 +13,11 @@ if [ -z "${DIALOG}" ]; then
     DIALOG=$(which dialog)
 fi
 
-if [ -z "${DIALOG}" ]; then
+if [ -n "${DIALOG}" ]; then
     ${DIALOG} --msgbox "\
 Welcome to the Raspberry PI image creation program. \
 The install process is fairly straightforward, and \
-you should run through the options in the order they \ 
+you should run through the options in the order they \
 are presented. \
 " 20 70 1
 else
@@ -34,3 +34,42 @@ else
     echo
 fi
 
+#--------------------------------------------------------------------
+# Initialize directories
+#--------------------------------------------------------------------
+if [ -z "${BUILD_DIRECTORY}" ]; then
+    BUILD_DIRECTORY="$(pwd)/rpi"
+fi
+
+[ ! -d ${BUILD_DIRECTORY} ] && mkdir -p ${BUILD_DIRECTORY}
+[ -d ${BUILD_DIRECTORY}/setup-files ] && rm -rf ${BUILD_DIRECTORY}/setup-files
+
+if [ ! -d ${BUILD_DIRECTORY}/firmware ]; then
+    wget --no-check-certificate --no-cache https://github.com/raspberrypi/firmware/archive/master.tar.gz -O ${BUILD_DIRECTORY}/firmware-master.tar.gz
+    if [ $? -ne 0 ]; then
+        if [ -n "${DIALOG}" ]; then
+            ${DIALOG} --title "Error" --msgbox "Failed to download Raspberry PI firmware." 20 70 1
+        else
+            echo
+            echo "Error: Failed to download Raspberry PI formware."
+            echo
+            exit 1
+        fi
+    fi
+
+	cd ${BUILD_DIRECTORY}
+    tar -zxf firmware-master.tar.gz
+    if [ $? -ne 0 ]; then
+        if [ -n "${DIALOG}" ]; then
+            ${DIALOG} --title "Error" --msgbox "Failed to extract Raspberry PI firmware." 20 70 1
+        else
+            echo
+            echo "Error: Failed to extract Raspberry PI formware."
+            echo
+            exit 1
+        fi
+    fi
+	
+	rm -f ${BUILD_DIRECTORY}/firmware-master.tar.gz
+	
+fi
