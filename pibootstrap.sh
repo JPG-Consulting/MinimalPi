@@ -4,10 +4,6 @@ IMAGE_SIZE=500
 DEF_MIRROR="http://mirrordirector.raspbian.org/raspbian"
 ARCH="armhf"
 PACKAGES=( "sudo" "locales" "keyboard-configuration" "ntpdate" "ifupdown" )
-# From kiosk (https://github.com/fabian-rump/kiosk-rpi-client/blob/master/create-chroot.sh)
-#    xinit,openbox,x11-xserver-utils
-# From https://www.raspberrypi.org/forums/viewtopic.php?f=83&t=109334
-#    xserver-xorg xinit xserver-xorg-video-fbdev lxde lxde-core lxde-common
 
 function install_dependencies() {
     local required="coreutils mount util-linux debootstrap parted e2fsprogs dosfstools git build-essential devscripts debhelper pv wget ca-certificates"
@@ -308,6 +304,17 @@ function is_host_arm() {
     fi
 }
 
+function install_desktop_environment() {
+    # From kiosk (https://github.com/fabian-rump/kiosk-rpi-client/blob/master/create-chroot.sh)
+    #    openbox
+    # From https://www.raspberrypi.org/forums/viewtopic.php?f=83&t=109334
+    #    lxde lxde-core lxde-common
+    PACKAGES+=( "xinit" "xserver-xorg" "xserver-xorg-video-fbdev")
+
+    # Bigger image size
+    IMAGE_SIZE=$(( IMAGE_SIZE + 400 ))
+}
+
 #--------------------------------------------------------------------
 # Application entry point
 #--------------------------------------------------------------------
@@ -601,12 +608,16 @@ EOF
 #--------------------------------------------------------------------
 if [ -n "${DIALOG}" ]; then
     ${DIALOG} --title "Software Selection" --checklist "At the moment, only the core of the system will be installed. To tune the system to your needs, you can choose to install one or more of the following predifined collections of software.\n\nChoose software to install:" 20 78 15 \
-        1 "SSH Server" on \
+        1 "Desktop environment" off \
+        2 "SSH Server" on \
         2>results
 
     while read choice; do
         case $choice in
             1)
+                install_desktop_environment
+                ;;
+            2)
                 PACKAGES+=( "dropbear" )
                 ;;
         esac
@@ -620,6 +631,10 @@ else
     echo "To tune the system to your needs, you can choose to install one"
     echo "or more of the following predifined collections of software."
     echo
+
+    if prompt_yesno "Install desktop environment" y; then
+        install_desktop_environment
+    fi
 
     if prompt_yesno "Install SSH server" y; then
         PACKAGES+=( "dropbear" )
