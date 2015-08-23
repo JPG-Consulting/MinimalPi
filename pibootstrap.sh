@@ -5,6 +5,30 @@ MIRROR="http://mirrordirector.raspbian.org/raspbian"
 ARCH="armhf"
 PACKAGES=( "sudo" "locales" "keyboard-configuration" )
 
+function install_dependencies() {
+    local required="coreutils mount util-linux debootstrap parted e2fsprogs dosfstools git build-essential devscripts debhelper pv wget ca-certificates"
+    local to_install=()
+	
+    if ! is_host_arm; then
+        required="${required} qemu-user-static binfmt-support"
+    fi
+
+    for package in $required; do
+        if [ $(dpkg-query -W -f='${Status}' ${package} 2>/dev/null | grep -c "ok installed") -eq 0 ]; then
+            to_install+=( "${package}" )	
+        fi
+    done
+
+    if [ ${#to_install[@]} -ne 0 ]; then
+        echo "Installing dependencies."
+		apt-get -y -qq update
+        apt-get -y install ${to_install[@]}
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+    fi
+}
+
 #----------------------------------------------------
 # prompt_yesno <question> [default]
 # Prompts the user for a yes/no answer to a question.
@@ -312,6 +336,8 @@ else
     echo
 fi
 
+install_dependencies
+
 #--------------------------------------------------------------------
 # Initialize directories
 #--------------------------------------------------------------------
@@ -557,32 +583,21 @@ IMAGE_FILE="${BUILD_DIRECTORY}/$(date +%Y-%m-%d)-minimalpi-${SUITE}.img"
 
 [ -e ${IMAGE_FILE} ] && rm -f ${IMAGE_FILE}
 
-dd if=/dev/zero of=${IMAGE_FILE} bs=512 count=${block_count} >& /dev/null
-if [ $? -ne 0 ]; then
-    if [ -n "${DIALOG}" ]; then
+if [ -n "${DIALOG}" ]; then
+    (pv --size ${IMAGE_SIZE}m -n /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count}) 2>&1 | ${DIALOG} --backtitle "${BACKTITLE}" --title "Image file" --gauge "Creating image file, please wait..." 10 70 0
+    if [ $? -ne 0 ]; then
         ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to create image file." 20 60 2
         exit 1
-    else
+    fi
+else
+    echo "Creating image file, please wait..."
+
+    pv --size ${IMAGE_SIZE}m /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count} >& /dev/null
+    if [ $? -ne 0 ]; then
         echo "Error: Failed to create image file ${image}."
         exit 1
     fi
 fi
-
-#if [ -n "${DIALOG}" ]; then
-#    (pv --size ${IMAGE_SIZE}m -n /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count}) 2>&1 | ${DIALOG} --backtitle "${BACKTITLE}" --title "Image file" --gauge "Creating image file, please wait..." 10 70 0
-#    if [ $? -ne 0 ]; then
-#        ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to create image file." 20 60 2
-#        exit 1
-#    fi
-#else
-#    echo "Creating image file, please wait..."
-#
-#    pv --size ${IMAGE_SIZE}m /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count} >& /dev/null
-#    if [ $? -ne 0 ]; then
-#        echo "Error: Failed to create image file ${image}."
-#        exit 1
-#    fi
-#fi
 
 if [ ! -e ${IMAGE_FILE} ]; then
     if [ -n "${DIALOG}" ]; then
@@ -595,8 +610,7 @@ fi
 
 echo "Creating partition table."
 
-#fdisk ${IMAGE_FILE} << EOF >& /dev/null
-fdisk ${IMAGE_FILE} << EOF
+fdisk ${IMAGE_FILE} << EOF >& /dev/null
 n
 p
 1
@@ -662,7 +676,7 @@ if [ $? -ne 0 ]; then
     else
         echo "Error: debootstrap failed on first stage."
     fi
-    return 1
+    exit 1
 fi
 	
 # Before CHROOT
@@ -678,7 +692,7 @@ if ! is_host_arm; then
                 else
                     echo "Error: Unable to copy /usr/bin/qemu-arm-static to ${CHROOT_DIR}/usr/bin/qemu-arm-static."
                 fi
-                return 1
+                exit 1
             fi
         fi
     else
@@ -689,7 +703,7 @@ if ! is_host_arm; then
         else
             echo "Error: Missing file /usr/bin/qemu-arm-static."
         fi
-        return 1
+        exit 1
     fi
 fi
 
@@ -701,7 +715,7 @@ if [ $? -ne 0 ]; then
     else
         echo "Error: debootstrap failed on second stage."
     fi
-    return 1
+    exit 1
 fi
 	
 # Exit
