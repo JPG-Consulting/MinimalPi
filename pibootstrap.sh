@@ -632,7 +632,7 @@ else
     echo "or more of the following predifined collections of software."
     echo
 
-    if prompt_yesno "Install desktop environment" y; then
+    if prompt_yesno "Install desktop environment" n; then
         install_desktop_environment
     fi
 
