@@ -99,6 +99,9 @@ function image_losetup() {
 
             BOOT_PARTITION=${TARGET_DEVICE}p1
             ROOT_PARTITION=${TARGET_DEVICE}p2
+
+            echo "--- Boot: ${BOOT_PARTITION}"
+            echo "--- Root: ${ROOT_PARTITION}"
 		fi
     fi
 
@@ -554,10 +557,17 @@ IMAGE_FILE="${BUILD_DIRECTORY}/$(date +%Y-%m-%d)-minimalpi-${SUITE}.img"
 
 [ -e ${IMAGE_FILE} ] && rm -f ${IMAGE_FILE}
 
-block_count=$(( IMAGE_SIZE * 1000000 / 512 ))
-
-echo "Block count: ${block_count}"
 dd if=/dev/zero of=${IMAGE_FILE} bs=512 count=${block_count} >& /dev/null
+if [ $? -ne 0 ]; then
+    if [ -n "${DIALOG}" ]; then
+        ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to create image file." 20 60 2
+        exit 1
+    else
+        echo "Error: Failed to create image file ${image}."
+        exit 1
+    fi
+fi
+
 #if [ -n "${DIALOG}" ]; then
 #    (pv --size ${IMAGE_SIZE}m -n /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count}) 2>&1 | ${DIALOG} --backtitle "${BACKTITLE}" --title "Image file" --gauge "Creating image file, please wait..." 10 70 0
 #    if [ $? -ne 0 ]; then
@@ -585,7 +595,8 @@ fi
 
 echo "Creating partition table."
 
-fdisk ${IMAGE_FILE} << EOF >& /dev/null
+#fdisk ${IMAGE_FILE} << EOF >& /dev/null
+fdisk ${IMAGE_FILE} << EOF
 n
 p
 1
