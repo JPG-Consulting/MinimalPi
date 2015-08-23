@@ -595,8 +595,8 @@ EOF
 #--------------------------------------------------------------------
 # Software selection
 #--------------------------------------------------------------------
-if [ -n "$whiptail_bin" ]; then
-    ${whiptail_bin} --title "Software Selection" --checklist "At the moment, only the core of the system will be installed. To tune the system to your needs, you can choose to install one or more of the following predifined collections of software.\n\nChoose software to install:" 20 78 15 \
+if [ -n "${DIALOG}" ]; then
+    ${DIALOG} --title "Software Selection" --checklist "At the moment, only the core of the system will be installed. To tune the system to your needs, you can choose to install one or more of the following predifined collections of software.\n\nChoose software to install:" 20 78 15 \
         1 "SSH Server" on \
         2>results
 
@@ -821,6 +821,14 @@ cp -R ${BUILD_DIRECTORY}/firmware/hardfp/opt/* ${CHROOT_DIR}/opt/
 [ ! -d ${CHROOT_DIR}/lib/modules/ ] && mkdir -p ${CHROOT_DIR}/lib/modules/
 cp -R ${BUILD_DIRECTORY}/firmware/modules/* ${CHROOT_DIR}/lib/modules/
 cp -R ${BUILD_DIRECTORY}/firmware/boot/* ${CHROOT_DIR}/boot/
+if [ $? -ne 0 ]; then
+    if [ -n "${DIALOG}" ]; then
+        ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to copy firmware boot files." 20 60 2
+    else
+        echo "Error: failed to copy firmware boot files."
+    fi
+    exit 1
+fi
 
 cat <<EOF > ${CHROOT_DIR}/boot/config.txt
 # For more options and information see
