@@ -8,7 +8,7 @@ PACKAGES=( "sudo" "locales" "keyboard-configuration" )
 function install_dependencies() {
     local required="coreutils mount util-linux debootstrap parted e2fsprogs dosfstools git build-essential devscripts debhelper pv wget ca-certificates"
     local to_install=()
-	
+
     if ! is_host_arm; then
         required="${required} qemu-user-static binfmt-support"
     fi
@@ -40,7 +40,6 @@ function prompt_yesno() {
     local prompt=$1
     local default_value=$2
 
-    # "blablabla [Y/n]? "
     case "$default_value" in
         y|Y)
             prompt="${prompt} [Y/n]? ";;
@@ -123,9 +122,6 @@ function image_losetup() {
 
             BOOT_PARTITION=${TARGET_DEVICE}p1
             ROOT_PARTITION=${TARGET_DEVICE}p2
-
-            echo "--- Boot: ${BOOT_PARTITION}"
-            echo "--- Root: ${ROOT_PARTITION}"
 		fi
     fi
 
@@ -136,44 +132,50 @@ function image_losetup_detach() {
     if [ -n "${IMAGE_FILE}" ]; then
         echo "Detaching loop devices."
 
-        if [ -n "${ROOT_PARTITION}" ]; then
-            partx -d ${ROOT_PARTITION}
-            if [ $? -eq 0 ]; then
-                ROOT_PARTITION=""
-            else
+        partx -d ${TARGET_DEVICE}
+        if [ $? -ne 0 ]; then
+            if [ -n "${ROOT_PARTITION}" ]; then
+                partx -d ${ROOT_PARTITION}
+                if [ $? -eq 0 ]; then
+                    ROOT_PARTITION=""
+                else
+                    partx -d ${BOOT_PARTITION}
+                    if [ $? -eq 0 ]; then
+                        BOOT_PARTITION=""
+                    fi
+                    losetup -d ${TARGET_DEVICE}
+                    if [ $? -eq 0 ]; then
+                        TARGET_DEVICE=""
+                    fi
+                    if [ -n "${DIALOG}" ]; then
+                        ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach mapped partition ${ROOT_PARTITION}." 20 60 2
+                    else
+                        echo "Error: Failed to detach mapped partition ${ROOT_PARTITION}."
+                    fi
+                    return 1
+                fi
+            fi
+
+            if [ -n "${BOOT_PARTITION}" ]; then
                 partx -d ${BOOT_PARTITION}
                 if [ $? -eq 0 ]; then
                     BOOT_PARTITION=""
-                fi
-                losetup -d ${TARGET_DEVICE}
-                if [ $? -eq 0 ]; then
-                    TARGET_DEVICE=""
-                fi
-                if [ -n "${DIALOG}" ]; then
-                    ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach mapped partition ${ROOT_PARTITION}." 20 60 2
                 else
-                    echo "Error: Failed to detach mapped partition ${ROOT_PARTITION}."
+                    losetup -d ${TARGET_DEVICE}
+                    if [ $? -eq 0 ]; then
+                        TARGET_DEVICE=""
+                    fi
+                    if [ -n "${DIALOG}" ]; then
+                        ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach mapped partition ${BOOT_PARTITION}" 20 60 2
+                    else
+                        echo "Error: Failed to detach mapped partition ${BOOT_PARTITION}."
+                    fi
+                    return 1
                 fi
-                return 1
             fi
-        fi
-
-        if [ -n "${BOOT_PARTITION}" ]; then
-            partx -d ${BOOT_PARTITION}
-            if [ $? -eq 0 ]; then
-                BOOT_PARTITION=""
-            else
-                losetup -d ${TARGET_DEVICE}
-                if [ $? -eq 0 ]; then
-                    TARGET_DEVICE=""
-                fi
-                if [ -n "${DIALOG}" ]; then
-                    ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach mapped partition ${BOOT_PARTITION}" 20 60 2
-                else
-                    echo "Error: Failed to detach mapped partition ${BOOT_PARTITION}."
-                fi
-                return 1
-            fi
+        else
+            BOOT_PARTITION=""
+            ROOT_PARTITION=""
         fi
 
         if [ -n "${TARGET_DEVICE}" ]; then
@@ -237,7 +239,7 @@ function mount_partitions() {
     [ ! -d ${CHROOT_DIR}/boot ] && mkdir -p ${CHROOT_DIR}/boot
     mount ${BOOT_PARTITION} ${CHROOT_DIR}/boot
     if [ $? -ne 0 ]; then
-        umount --force --lazy ${CHROOT_DIR}
+        umount -f -l ${CHROOT_DIR}
         if [ -n "${DIALOG}" ]; then
             ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to mount boot partition." 20 60 2
         else
@@ -268,8 +270,9 @@ function umount_partitions() {
         return 0
     fi
 
-    umount --force --lazy ${CHROOT_DIR}/boot
+    umount -f -l ${CHROOT_DIR}/boot
     if [ $? -ne 0 ]; then
+        umount -f -l ${CHROOT_DIR}
         if [ -n "${DIALOG}" ]; then
             ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to unmount boot partition." 20 60 2
         else
@@ -278,7 +281,7 @@ function umount_partitions() {
         return 1
     fi
 
-    umount --force --lazy ${CHROOT_DIR}
+    umount -f -l ${CHROOT_DIR}
     if [ $? -ne 0 ]; then
         if [ -n "${DIALOG}" ]; then
             ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to unmount root partition." 20 60 2
@@ -347,6 +350,7 @@ fi
 
 [ ! -d ${BUILD_DIRECTORY} ] && mkdir -p ${BUILD_DIRECTORY}
 [ -d ${BUILD_DIRECTORY}/setup-files ] && rm -rf ${BUILD_DIRECTORY}/setup-files
+echo "#!/bin/bash" > ${BUILD_DIRECTORY}/setup-files/first-stage
 
 if [ ! -d ${BUILD_DIRECTORY}/firmware ]; then
     wget --no-check-certificate --no-cache https://github.com/raspberrypi/firmware/archive/master.tar.gz -O ${BUILD_DIRECTORY}/firmware-master.tar.gz
@@ -576,6 +580,46 @@ Re-enter password to verify: \
 	fi
 done
 
+# we add user creation commands to first-stage
+cat <<EOF >> ${BUILD_DIRECTORY}/setup-files/first-stage
+useradd --create-home --shell /bin/bash --groups adm,dialout,cdrom,sudo,audio,video,plugdev,games,users ${USER_USERNAME}
+if [ \$? -ne 0 ]; then
+    echo "Error: Failed to create user ${USER_USERNAME}"
+    exit 1
+fi
+echo -e "${USER_PASSWORD}\n${USER_PASSWORD}\n" | sudo passwd ${USER_USERNAME}
+EOF
+
+#--------------------------------------------------------------------
+# Software selection
+#--------------------------------------------------------------------
+if [ -n "$whiptail_bin" ]; then
+    ${whiptail_bin} --title "Software Selection" --checklist "At the moment, only the core of the system will be installed. To tune the system to your needs, you can choose to install one or more of the following predifined collections of software.\n\nChoose software to install:" 20 78 15 \
+        "SSH Server" "" on \
+        2>results
+
+    while read choice; do
+        case $choice in
+            SSH Server)
+                PACKAGES+=( "dropbear" )
+                ;;
+        esac
+    done < results
+else
+    echo
+    echo "Software Selection"
+    echo "=================="
+    echo
+    echo "At the moment, only the core of the system will be installed."
+    echo "To tune the system to your needs, you can choose to install one"
+    echo "or more of the following predifined collections of software."
+    echo
+
+    if prompt_yesno "Install SSH server" y; then
+        PACKAGES+=( "dropbear" )
+    fi
+fi
+
 #--------------------------------------------------------------------
 # Create the image
 #--------------------------------------------------------------------
@@ -722,7 +766,128 @@ if [ $? -ne 0 ]; then
     fi
     exit 1
 fi
-	
+
+# Setup networking
+if [ -x ${CHROOT_DIR}/sbin/dhclient ]; then
+    cat <<EOF > ${CHROOT_DIR}/etc/network/interfaces
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+EOF
+fi
+
+echo "${HOSTNAME}" > ${CHROOT_DIR}/etc/hostname
+
+if [ -e ${CHROOT_DIR}/etc/hosts ]; then
+    echo "127.0.1.1	${HOSTNAME}" >> ${CHROOT_DIR}/etc/hosts
+else
+    cat <<EOF > ${CHROOT_DIR}/etc/hosts
+127.0.0.1	localhost
+127.0.1.1	${HOSTNAME}
+# The following lines are desirable for IPv6 capable hosts
+::1		localhost ip6-localhost ip6-loopback
+ff02::1		ip6-allnodes
+ff02::2		ip6-allrouters
+EOF
+fi
+
+cat <<EOF > ${CHROOT_DIR}/etc/fstab
+proc            /proc           proc    defaults          0       0
+/dev/mmcblk0p1  /boot           vfat    defaults          0       2
+EOF
+
+# Sudo without password
+if [ -e ${CHROOT_DIR}/etc/sudoers ]; then
+    sed -i -E 's/^%sudo.+/%sudo ALL=(ALL) NOPASSWD: ALL/' ${CHROOT_DIR}/etc/sudoers
+fi
+
+# Dropbear configuration
+if [ -f ${CHROOT_DIR}/etc/default/dropbear ]; then
+    sed -i 's/NO_START=1/NO_START=0/g' ${CHROOT_DIR}/etc/default/dropbear
+    sed -i 's/DROPBEAR_EXTRA_ARGS=/DROPBEAR_EXTRA_ARGS="-w"/g' ${CHROOT_DIR}/etc/default/dropbear
+fi
+
+# Remove extra ttys (Save: ~3.5 MB RAM)
+sed -i '/[2-6]:23:respawn:\/sbin\/getty 38400 tty[2-6]/s%^%#%g' ${CHROOT_DIR}/etc/inittab
+sed -i '/T0:23:respawn:\/sbin\/getty -L ttyAMA0 115200 vt100/s%^%#%g' ${CHROOT_DIR}/etc/inittab
+
+# Write boot filesystem
+[ ! -d ${CHROOT_DIR}/opt ] && mkdir -p ${CHROOT_DIR}/opt
+cp -R ${BUILD_DIRECTORY}/firmware/hardfp/opt/* ${CHROOT_DIR}/opt/
+[ ! -d ${CHROOT_DIR}/lib/modules/ ] && mkdir -p ${CHROOT_DIR}/lib/modules/
+cp -R ${BUILD_DIRECTORY}/firmware/modules/* ${CHROOT_DIR}/lib/modules/
+cp -R ${BUILD_DIRECTORY}/firmware/boot/* ${CHROOT_DIR}/boot/
+
+cat <<EOF > ${CHROOT_DIR}/boot/config.txt
+# For more options and information see
+# http://www.raspberrypi.org/documentation/configuration/config-txt.md
+# Some settings may impact device functionality. See link above for details
+# uncomment if you get no picture on HDMI for a default "safe" mode
+#hdmi_safe=1
+# uncomment this if your display has a black border of unused pixels visible
+# and your display can output without overscan
+#disable_overscan=1
+# uncomment the following to adjust overscan. Use positive numbers if console
+# goes off screen, and negative if there is too much border
+#overscan_left=16
+#overscan_right=16
+#overscan_top=16
+#overscan_bottom=16
+# uncomment to force a console size. By default it will be display's size minus
+# overscan.
+#framebuffer_width=1280
+#framebuffer_height=720
+# uncomment if hdmi display is not detected and composite is being output
+#hdmi_force_hotplug=1
+# uncomment to force a specific HDMI mode (this will force VGA)
+#hdmi_group=1
+#hdmi_mode=1
+# uncomment to force a HDMI mode rather than DVI. This can make audio work in
+# DMT (computer monitor) modes
+#hdmi_drive=2
+# uncomment to increase signal to HDMI, if you have interference, blanking, or
+# no display
+#config_hdmi_boost=4
+# uncomment for composite PAL
+#sdtv_mode=2
+#uncomment to overclock the arm. 700 MHz is the default.
+#arm_freq=800
+# Uncomment some or all of these to enable the optional hardware interfaces
+#dtparam=i2c_arm=on
+#dtparam=i2s=on
+#dtparam=spi=on
+# Uncomment this to enable the lirc-rpi module
+#dtoverlay=lirc-rpi
+# Additional overlays and parameters are documented /boot/overlays/README
+gpu_mem=16
+EOF
+
+echo "dwc_otg.lpm_enable=0 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait" > ${CHROOT_DIR}/boot/cmdline.txt
+
+# Run custom setup script
+cp ${BUILD_DIRECTORY}/setup-files/first-stage ${CHROOT}/setup.sh
+if [ $? -ne 0 ]; then
+    if [ -n "${DIALOG}" ]; then
+        ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to copy custom setup script." 20 60 2
+    else
+        echo "Error: failed to copy custom setup script."
+    fi
+    exit 1
+fi
+
+LANG=C chroot ${CHROOT_DIR} /setup.sh
+if [ $? -ne 0 ]; then
+    if [ -n "${DIALOG}" ]; then
+        ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed custom setup on first stage." 20 60 2
+    else
+        echo "Error: failed custom setup on first stage."
+    fi
+    exit 1
+fi
+rm -f ${CHROOT}/setup.sh
+
 # Exit
 # Remove qemu file before unmounting
 if [ -e ${CHROOT_DIR}/usr/bin/qemu-arm-static ]; then
