@@ -583,6 +583,8 @@ IMAGE_FILE="${BUILD_DIRECTORY}/$(date +%Y-%m-%d)-minimalpi-${SUITE}.img"
 
 [ -e ${IMAGE_FILE} ] && rm -f ${IMAGE_FILE}
 
+block_count=$(( IMAGE_SIZE * 1000000 / 512 ))
+
 if [ -n "${DIALOG}" ]; then
     (pv --size ${IMAGE_SIZE}m -n /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count}) 2>&1 | ${DIALOG} --backtitle "${BACKTITLE}" --title "Image file" --gauge "Creating image file, please wait..." 10 70 0
     if [ $? -ne 0 ]; then
