@@ -4,6 +4,10 @@ IMAGE_SIZE=500
 DEF_MIRROR="http://mirrordirector.raspbian.org/raspbian"
 ARCH="armhf"
 PACKAGES=( "sudo" "locales" "keyboard-configuration" "ntpdate" "ifupdown" )
+# From kiosk (https://github.com/fabian-rump/kiosk-rpi-client/blob/master/create-chroot.sh)
+#    xinit,openbox,x11-xserver-utils
+# From https://www.raspberrypi.org/forums/viewtopic.php?f=83&t=109334
+#    xserver-xorg xinit xserver-xorg-video-fbdev lxde lxde-core lxde-common
 
 function install_dependencies() {
     local required="coreutils mount util-linux debootstrap parted e2fsprogs dosfstools git build-essential devscripts debhelper pv wget ca-certificates"
