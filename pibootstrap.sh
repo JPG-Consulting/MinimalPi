@@ -557,7 +557,7 @@ IMAGE_FILE="${BUILD_DIRECTORY}/$(date +%Y-%m-%d)-minimalpi-${SUITE}.img"
 block_count=$(( IMAGE_SIZE * 1000000 / 512 ))
 
 if [ -n "${DIALOG}" ]; then
-    (pv --size ${IMAGE_SIZE}m -n /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count} 2>&1) | ${DIALOG} --backtitle "${BACKTITLE}" --title "Image file" --gauge "Creating image file, please wait..." 10 70 0
+    (pv --size ${IMAGE_SIZE}m -n /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count}) 2>&1 | ${DIALOG} --backtitle "${BACKTITLE}" --title "Image file" --gauge "Creating image file, please wait..." 10 70 0
     if [ $? -ne 0 ]; then
         ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to create image file." 20 60 2
         exit 1
@@ -570,6 +570,15 @@ else
         echo "Error: Failed to create image file ${image}."
         exit 1
     fi
+fi
+
+if [ ! -e ${IMAGE_FILE} ]; then
+    if [ -n "${DIALOG}" ]; then
+        ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Missing image file." 20 70 1
+    else
+        echo "Error: Missing image file."
+    fi
+    exit 1
 fi
 
 echo "Creating partition table."
