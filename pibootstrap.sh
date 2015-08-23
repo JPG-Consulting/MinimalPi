@@ -14,13 +14,14 @@ if [ -z "${DIALOG}" ]; then
 fi
 
 if [ -z "${DIALOG}" ]; then
-    ${whiptail_bin} --msgbox "\
+    ${DIALOG} --msgbox "\
 Welcome to the Raspberry PI image creation program. \
 The install process is fairly straightforward, and \
 you should run through the options in the order they \ 
 are presented. \
 " 20 70 1
 else
+    echo
     echo "Raspberry PI Image Creator"
     echo "=========================="
     echo
@@ -30,5 +31,6 @@ else
     echo " are presented."
     echo
     read -n 1 -s -p "Press any key to continue..."
+    echo
 fi
 
