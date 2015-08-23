@@ -350,6 +350,8 @@ fi
 
 [ ! -d ${BUILD_DIRECTORY} ] && mkdir -p ${BUILD_DIRECTORY}
 [ -d ${BUILD_DIRECTORY}/setup-files ] && rm -rf ${BUILD_DIRECTORY}/setup-files
+mkdir -p ${BUILD_DIRECTORY}/setup-files
+
 echo "#!/bin/bash" > ${BUILD_DIRECTORY}/setup-files/first-stage
 
 if [ ! -d ${BUILD_DIRECTORY}/firmware ]; then
@@ -595,12 +597,12 @@ EOF
 #--------------------------------------------------------------------
 if [ -n "$whiptail_bin" ]; then
     ${whiptail_bin} --title "Software Selection" --checklist "At the moment, only the core of the system will be installed. To tune the system to your needs, you can choose to install one or more of the following predifined collections of software.\n\nChoose software to install:" 20 78 15 \
-        "SSH Server" "" on \
+        1 "SSH Server" on \
         2>results
 
     while read choice; do
         case $choice in
-            SSH Server)
+            1)
                 PACKAGES+=( "dropbear" )
                 ;;
         esac
