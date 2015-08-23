@@ -15,7 +15,7 @@ PACKAGES=( "sudo" "locales" "keyboard-configuration" )
 function prompt_yesno() {
     local prompt=$1
     local default_value=$2
-	
+
     # "blablabla [Y/n]? "
     case "$default_value" in
         y|Y)
@@ -113,25 +113,25 @@ function image_losetup_detach() {
             partx -d ${ROOT_PARTITION}
             if [ $? -eq 0 ]; then
                 ROOT_PARTITION=""
-		    else
+            else
                 partx -d ${BOOT_PARTITION}
-				if [ $? -eq 0 ]; then
+                if [ $? -eq 0 ]; then
                     BOOT_PARTITION=""
-				fi
+                fi
                 losetup -d ${TARGET_DEVICE}
-				if [ $? -eq 0 ]; then
+                if [ $? -eq 0 ]; then
                     TARGET_DEVICE=""
                 fi
                 if [ -n "${DIALOG}" ]; then
-				    ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach mapped partition ${ROOT_PARTITION}." 20 60 2
+                    ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach mapped partition ${ROOT_PARTITION}." 20 60 2
                 else
                     echo "Error: Failed to detach mapped partition ${ROOT_PARTITION}."
                 fi
                 return 1
             fi
-	    fi
-	
-	    if [ -n "${BOOT_PARTITION}" ]; then
+        fi
+
+        if [ -n "${BOOT_PARTITION}" ]; then
             partx -d ${BOOT_PARTITION}
             if [ $? -eq 0 ]; then
                 BOOT_PARTITION=""
@@ -141,7 +141,7 @@ function image_losetup_detach() {
                     TARGET_DEVICE=""
                 fi
                 if [ -n "${DIALOG}" ]; then
-				    ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach mapped partition ${BOOT_PARTITION}" 20 60 2
+                    ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach mapped partition ${BOOT_PARTITION}" 20 60 2
                 else
                     echo "Error: Failed to detach mapped partition ${BOOT_PARTITION}."
                 fi
@@ -155,7 +155,7 @@ function image_losetup_detach() {
                 TARGET_DEVICE=""
             else
                 if [ -n "${DIALOG}" ]; then
-				    ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach loop device ${TARGET_DEVICE}." 20 60 2
+                    ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to detach loop device ${TARGET_DEVICE}." 20 60 2
                 else
                     echo "Error: Failed to detach loop device ${TARGET_DEVICE}."
                 fi
@@ -164,7 +164,7 @@ function image_losetup_detach() {
         fi
     fi
 
-	return 0
+    return 0
 }
 
 function mount_partitions() {
@@ -557,7 +557,7 @@ IMAGE_FILE="${BUILD_DIRECTORY}/$(date +%Y-%m-%d)-minimalpi-${SUITE}.img"
 block_count=$(( IMAGE_SIZE * 1000000 / 512 ))
 
 if [ -n "${DIALOG}" ]; then
-    (pv --size ${IMAGE_SIZE}m -n /dev/zero | dd of="${IMAGE_FILE}" bs=512 count=${block_count}) 2>&1 | ${DIALOG} --backtitle "${BACKTITLE}" --title "Image file" --gauge "Creating image file, please wait..." 10 70 0
+    (pv --size ${IMAGE_SIZE}m -n /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count} 2>&1) | ${DIALOG} --backtitle "${BACKTITLE}" --title "Image file" --gauge "Creating image file, please wait..." 10 70 0
     if [ $? -ne 0 ]; then
         ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Failed to create image file." 20 60 2
         exit 1
@@ -565,7 +565,7 @@ if [ -n "${DIALOG}" ]; then
 else
     echo "Creating image file, please wait..."
 
-    pv --size ${IMAGE_SIZE}m /dev/zero | dd of=$IMAGE_FILE bs=512 count=${block_count} >& /dev/null
+    pv --size ${IMAGE_SIZE}m /dev/zero | dd of=${IMAGE_FILE} bs=512 count=${block_count} >& /dev/null
     if [ $? -ne 0 ]; then
         echo "Error: Failed to create image file ${image}."
         exit 1
