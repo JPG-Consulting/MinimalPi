@@ -1,7 +1,7 @@
 #!/bin/bash
 
 IMAGE_SIZE=400
-MIRROR="http://mirrordirector.raspbian.org/raspbian"
+DEF_MIRROR="http://mirrordirector.raspbian.org/raspbian"
 ARCH="armhf"
 PACKAGES=( "sudo" "locales" "keyboard-configuration" )
 
@@ -674,7 +674,7 @@ if ! mount_partitions; then
     exit 1
 fi
 
-debootstrap --no-check-gpg --foreign --arch=${ARCH} --include=$(IFS=,; echo "${PACKAGES[@]}") --variant=minbase ${SUITE} ${CHROOT_DIR} ${DEF_MIRROR}
+debootstrap --no-check-gpg --foreign --arch=${ARCH} --include=$(echo ${PACKAGES[@]} | tr ' ' ',') --variant=minbase ${SUITE} ${CHROOT_DIR} ${DEF_MIRROR}
 if [ $? -ne 0 ]; then
     if [ -n "${DIALOG}" ]; then
         ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "debootstrap failed on first stage." 20 60 2
