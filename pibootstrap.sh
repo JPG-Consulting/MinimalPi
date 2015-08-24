@@ -913,6 +913,9 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# Add cleanup
+echo "apt-get clean" >> ${CHROOT_DIR}/setup.sh
+
 LANG=C chroot ${CHROOT_DIR} /setup.sh
 if [ $? -ne 0 ]; then
     if [ -n "${DIALOG}" ]; then
