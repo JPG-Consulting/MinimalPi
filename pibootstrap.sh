@@ -433,7 +433,10 @@ fi
 [ -d ${BUILD_DIRECTORY}/setup-files ] && rm -rf ${BUILD_DIRECTORY}/setup-files
 mkdir -p ${BUILD_DIRECTORY}/setup-files
 
-echo "#!/bin/bash" > ${BUILD_DIRECTORY}/setup-files/first-stage
+cat <<EOF > ${BUILD_DIRECTORY}/setup-files/first-stage
+#!/bin/bash
+apt-get -y update
+EOF
 
 if [ ! -d ${BUILD_DIRECTORY}/firmware ]; then
     wget --no-check-certificate --no-cache https://github.com/raspberrypi/firmware/archive/master.tar.gz -O ${BUILD_DIRECTORY}/firmware-master.tar.gz
@@ -669,12 +672,13 @@ done
 
 # we add user creation commands to first-stage
 cat <<EOF >> ${BUILD_DIRECTORY}/setup-files/first-stage
+# Set default user
 useradd --create-home --shell /bin/bash --groups adm,dialout,cdrom,sudo,audio,video,plugdev,games,users ${USER_USERNAME}
 if [ \$? -ne 0 ]; then
-    echo "Error: Failed to create user ${USER_USERNAME}"
+    echo \"Error: Failed to create user ${USER_USERNAME}\"
     exit 1
 fi
-echo -e "${USER_PASSWORD}\n${USER_PASSWORD}\n" | sudo passwd ${USER_USERNAME}
+echo -e \"${USER_PASSWORD}\n${USER_PASSWORD}\n\" | passwd ${USER_USERNAME}
 EOF
 
 #--------------------------------------------------------------------
@@ -1001,7 +1005,11 @@ if [ $? -ne 0 ]; then
 fi
 
 # Add cleanup
-echo "apt-get clean" >> ${CHROOT_DIR}/setup.sh
+cat <<EOF >> ${CHROOT_DIR}/setup.sh
+# Clean up
+DEBIAN_FRONTEND=noninteractive apt-get clean
+EOF
+chmod +x ${CHROOT_DIR}/setup.sh
 
 LANG=C chroot ${CHROOT_DIR} /setup.sh
 if [ $? -ne 0 ]; then
