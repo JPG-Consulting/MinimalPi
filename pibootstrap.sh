@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+set -o pipefail
 
 IMAGE_SIZE=500
 DEF_MIRROR="http://mirrordirector.raspbian.org/raspbian"
@@ -440,6 +442,9 @@ mkdir -p ${BUILD_DIRECTORY}/setup-files
 
 cat <<EOF > ${BUILD_DIRECTORY}/setup-files/first-stage
 #!/bin/bash
+set -e
+set -o pipefail
+
 apt-get -y update
 EOF
 
@@ -456,7 +461,7 @@ if [ ! -d ${BUILD_DIRECTORY}/firmware ]; then
         fi
     fi
 
-	cd ${BUILD_DIRECTORY}
+    cd ${BUILD_DIRECTORY}
     tar -zxf firmware-master.tar.gz
     if [ $? -ne 0 ]; then
         if [ -n "${DIALOG}" ]; then
