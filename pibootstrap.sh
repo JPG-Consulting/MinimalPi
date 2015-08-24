@@ -305,10 +305,6 @@ function is_host_arm() {
 }
 
 function install_desktop_environment() {
-    # From kiosk (https://github.com/fabian-rump/kiosk-rpi-client/blob/master/create-chroot.sh)
-    #    openbox
-    # From https://www.raspberrypi.org/forums/viewtopic.php?f=83&t=109334
-    #    lxde lxde-core lxde-common
     PACKAGES+=( "xinit" "xserver-xorg" "xserver-xorg-video-fbdev")
 
     if [ -n "$DIALOG" ]; then
@@ -327,7 +323,7 @@ function install_desktop_environment() {
                     PACKAGES+=("fluxbox")
                     ;;
                 "lxde")
-                    PACKAGES+=("lxde" "lightdm")
+                    PACKAGES+=("lxde" "lxde-core" "lxde-common" "lightdm")
                     ;;
             esac
         fi
