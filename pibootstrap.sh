@@ -309,6 +309,33 @@ function is_host_arm() {
     fi
 }
 
+function set_static_ipaddress() {
+    if [ -n "$DIALOG" ]; then
+        NETWORK_IPADDRESS=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
+Please enter the IP address for this system.\n\n\
+IP Address:
+" 20 60 "" 3>&1 1>&2 2>&3)
+
+        NETWORK_NETMASK=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
+Please enter the netmask.\n\n\
+Netmask:
+" 20 60 "" 3>&1 1>&2 2>&3)
+
+        NETWORK_GATEWAY=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
+Please enter the gateway address.\n\n\
+Gateway:
+" 20 60 "" 3>&1 1>&2 2>&3)
+    else
+        echo
+        echo "Network Settings"
+        echo "================"
+        echo
+        read -p "IP Address: " NETWORK_IPADDRESS
+        read -p "Netmask: " NETWORK_NETMASK
+        read -p "Gateway: " NETWORK_GATEWAY
+    fi
+}
+
 function install_desktop_environment() {
     PACKAGES+=( "xinit" "xserver-xorg" "xserver-xorg-video-fbdev")
 
@@ -363,35 +390,6 @@ function install_desktop_environment() {
     # Change GPU_MEM
     GPU_MEM=64
 }
-
-
-function set_static_ipaddress() {
-    if [ -n "$DIALOG" ]; then
-        NETWORK_IPADDRESS=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
-Please enter the IP address for this system.\n\n\
-IP Address:
-" 20 60 "" 3>&1 1>&2 2>&3)
-
-        NETWORK_NETMASK=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
-Please enter the netmask.\n\n\
-Netmask:
-" 20 60 "" 3>&1 1>&2 2>&3)
-
-        NETWORK_GATEWAY=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
-Please enter the gateway address.\n\n\
-Gateway:
-" 20 60 "" 3>&1 1>&2 2>&3)
-    else
-        echo
-        echo "Network Settings"
-        echo "================"
-        echo
-        read -p "IP Address: " NETWORK_IPADDRESS
-        read -p "Netmask: " NETWORK_NETMASK
-        read -p "Gateway: " NETWORK_GATEWAY
-    fi
-}
-
 #--------------------------------------------------------------------
 # Application entry point
 #--------------------------------------------------------------------
