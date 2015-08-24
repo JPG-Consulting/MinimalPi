@@ -1035,6 +1035,10 @@ if [ -e ${CHROOT_DIR}/usr/bin/qemu-arm-static ]; then
     fi
 fi
 
+# Smaller file size for compression
+dd if=/dev/zero of=${CHROOT_DIR}/ZERO bs=512
+rm -f ${CHROOT_DIR}/ZERO
+
 umount_partitions
 image_losetup_detach
 
