@@ -615,10 +615,10 @@ if [ -n "${DIALOG}" ]; then
     if [ $? -eq 0 ]; then
         for pkg_num in $software_packages; do
             case $pkg_num in
-                1)
+                '"1"')
                     install_desktop_environment
                     ;;
-                2)
+                '"2"')
                     PACKAGES+=("dropbear")
                     ;;
             esac
