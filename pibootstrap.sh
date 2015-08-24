@@ -685,19 +685,19 @@ cat <<EOF >> ${BUILD_DIRECTORY}/setup-files/first-stage
 # Set default user
 useradd --create-home --shell /bin/bash --groups adm,dialout,cdrom,sudo,audio,video,plugdev,games,users ${USER_USERNAME}
 if [ \$? -ne 0 ]; then
-    echo \"Error: Failed to create user ${USER_USERNAME}\"
+    echo "Error: Failed to create user ${USER_USERNAME}"
     exit 1
 fi
 if [ -e /usr/sbin/chpasswd ]; then
-    echo \"${USER_USERNAME}:${USER_PASSWORD}\" | chpasswd
+    echo "${USER_USERNAME}:${USER_PASSWORD}" | chpasswd
     if [ \$? -ne 0 ]; then
-        echo \"Error: Failed set password for user ${USER_USERNAME}\"
+        echo "Error: Failed set password for user ${USER_USERNAME}"
         exit 1
     fi
 else
-    echo -e \"${USER_PASSWORD}\n${USER_PASSWORD}\" | passwd ${USER_USERNAME}
+    echo -e "${USER_PASSWORD}\n${USER_PASSWORD}" | passwd ${USER_USERNAME}
     if [ \$? -ne 0 ]; then
-        echo \"Error: Failed set password for user ${USER_USERNAME}\"
+        echo "Error: Failed set password for user ${USER_USERNAME}"
         exit 1
     fi
 fi
