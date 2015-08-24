@@ -607,7 +607,7 @@ EOF
 # Software selection
 #--------------------------------------------------------------------
 if [ -n "${DIALOG}" ]; then
-    software_package=$(${DIALOG} --title "Software Selection" --checklist "At the moment, only the core of the system will be installed. To tune the system to your needs, you can choose to install one or more of the following predifined collections of software.\n\nChoose software to install:" 20 78 15 \
+    software_packages=$(${DIALOG} --title "Software Selection" --checklist "At the moment, only the core of the system will be installed. To tune the system to your needs, you can choose to install one or more of the following predifined collections of software.\n\nChoose software to install:" 20 78 15 \
         1 "Desktop environment" off \
         2 "SSH Server" on \
         3>&1 1>&2 2>&3)
