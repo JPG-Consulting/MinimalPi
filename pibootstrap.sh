@@ -688,9 +688,14 @@ if [ \$? -ne 0 ]; then
     echo \"Error: Failed to create user ${USER_USERNAME}\"
     exit 1
 fi
-echo -e \"${USER_PASSWORD}\n${USER_PASSWORD}\" | passwd ${USER_USERNAME}
-if [ \$? -ne 0 ]; then
-    usermod --password=${USER_PASSWORD} ${USER_USERNAME}
+if [ -e /usr/sbin/chpasswd ]; then
+    echo \"${USER_USERNAME}:${USER_PASSWORD}\" | chpasswd
+    if [ \$? -ne 0 ]; then
+        echo \"Error: Failed set password for user ${USER_USERNAME}\"
+        exit 1
+    fi
+else
+    echo -e \"${USER_PASSWORD}\n${USER_PASSWORD}\" | passwd ${USER_USERNAME}
     if [ \$? -ne 0 ]; then
         echo \"Error: Failed set password for user ${USER_USERNAME}\"
         exit 1
