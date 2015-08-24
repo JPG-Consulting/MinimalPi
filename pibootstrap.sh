@@ -357,6 +357,34 @@ function install_desktop_environment() {
     IMAGE_SIZE=$(( IMAGE_SIZE + 400 ))
 }
 
+
+function set_static_ipaddress() {
+    if [ -n "$DIALOG" ]; then
+        NETWORK_IPADDRESS=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
+Please enter the IP address for this system.\n\n\
+IP Address:
+" 20 60 "" 3>&1 1>&2 2>&3)
+
+        NETWORK_NETMASK=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
+Please enter the netmask.\n\n\
+Netmask:
+" 20 60 "" 3>&1 1>&2 2>&3)
+
+        NETWORK_GATEWAY=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
+Please enter the gateway address.\n\n\
+Gateway:
+" 20 60 "" 3>&1 1>&2 2>&3)
+    else
+        echo
+        echo "Network Settings"
+        echo "================"
+        echo
+        read -p "IP Address: " NETWORK_IPADDRESS
+        read -p "Netmask: " NETWORK_NETMASK
+        read -p "Gateway: " NETWORK_GATEWAY
+    fi
+}
+
 #--------------------------------------------------------------------
 # Application entry point
 #--------------------------------------------------------------------
@@ -847,6 +875,17 @@ iface lo inet loopback
 
 auto eth0
 iface eth0 inet dhcp
+EOF
+elif [ -n "${NETWORK_IPADDRESS}" ]; then
+    cat <<EOF > ${CHROOT_DIR}/etc/network/interfaces
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+  address ${NETWORK_IPADDRESS}
+  netmask ${NETWORK_NETMASK}
+  gatewy ${NETWORK_GATEWAY}
 EOF
 fi
 
