@@ -4,6 +4,8 @@ IMAGE_SIZE=500
 DEF_MIRROR="http://mirrordirector.raspbian.org/raspbian"
 ARCH="armhf"
 PACKAGES=( "sudo" "locales" "keyboard-configuration" "ntpdate" "ifupdown" )
+# GPU_MEM - The value can be 16, 64, 128 or 256 and represents the amount 
+#           of RAM available to the GPU.
 GPU_MEM=16
 
 function install_dependencies() {
