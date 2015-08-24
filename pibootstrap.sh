@@ -4,6 +4,7 @@ IMAGE_SIZE=500
 DEF_MIRROR="http://mirrordirector.raspbian.org/raspbian"
 ARCH="armhf"
 PACKAGES=( "sudo" "locales" "keyboard-configuration" "ntpdate" "ifupdown" )
+GPU_MEM=16
 
 function install_dependencies() {
     local required="coreutils mount util-linux debootstrap parted e2fsprogs dosfstools git build-essential devscripts debhelper pv wget ca-certificates"
@@ -355,6 +356,8 @@ function install_desktop_environment() {
 
     # Bigger image size
     IMAGE_SIZE=$(( IMAGE_SIZE + 400 ))
+    # Change GPU_MEM
+    GPU_MEM=64
 }
 
 
@@ -988,7 +991,7 @@ cat <<EOF > ${CHROOT_DIR}/boot/config.txt
 # Uncomment this to enable the lirc-rpi module
 #dtoverlay=lirc-rpi
 # Additional overlays and parameters are documented /boot/overlays/README
-gpu_mem=16
+gpu_mem=${GPU_MEM}
 EOF
 
 echo "dwc_otg.lpm_enable=0 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait" > ${CHROOT_DIR}/boot/cmdline.txt
