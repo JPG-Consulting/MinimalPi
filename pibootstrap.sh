@@ -74,7 +74,7 @@ function prompt_yesno() {
                             ;;
                     esac
                 fi
-			    ;;
+                ;;
         esac
 	done
 }
