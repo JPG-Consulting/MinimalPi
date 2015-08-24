@@ -553,11 +553,15 @@ if [ -n "${DIALOG}" ]; then
     ${DIALOG} --backtitle "${BACKTITLE}" --title "Network" --yesno "Use DHCP to configure your network?" 20 60 2 
     if [ $? -eq 0 ]; then
         PACKAGES+=( "isc-dhcp-client" )
+    else
+        set_static_ipaddress
     fi
 else
     echo 
     if prompt_yesno "Use DHCP to configure your network" y; then
         PACKAGES+=( "isc-dhcp-client" )
+    else
+        set_static_ipaddress
     fi
 fi
 
