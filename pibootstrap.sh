@@ -879,13 +879,6 @@ if ! is_host_arm; then
     fi
 fi
 
-# APT sources
-cat <<EOF > ${CHROOT_DIR}/etc/apt/sources.list
-deb ${DEF_MIRROR} ${SUITE} main contrib non-free rpi
-# Uncomment line below then 'apt-get update' to enable 'apt-get source'
-#deb-src ${DEF_MIRROR} ${SUITE} main contrib non-free rpi
-EOF
-
 # Second stage
 LANG=C chroot ${CHROOT_DIR} /debootstrap/debootstrap --second-stage
 if [ $? -ne 0 ]; then
@@ -896,6 +889,13 @@ if [ $? -ne 0 ]; then
     fi
     exit 1
 fi
+
+# APT sources
+cat <<EOF > ${CHROOT_DIR}/etc/apt/sources.list
+deb ${DEF_MIRROR} ${SUITE} main contrib non-free rpi
+# Uncomment line below then 'apt-get update' to enable 'apt-get source'
+#deb-src ${DEF_MIRROR} ${SUITE} main contrib non-free rpi
+EOF
 
 # Setup networking
 if [ -x ${CHROOT_DIR}/sbin/dhclient ]; then
