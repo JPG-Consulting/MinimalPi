@@ -311,6 +311,52 @@ function install_desktop_environment() {
     #    lxde lxde-core lxde-common
     PACKAGES+=( "xinit" "xserver-xorg" "xserver-xorg-video-fbdev")
 
+    if [ -n "$DIALOG" ]; then
+        window_manager=$(${DIALOG} --backtitle "${BACKTITLE}" --title "Window Manager Selection" --menu "Choose your window manager" 15 70 4 \
+            "openbox" "Fast, light-weight and extensible window manager" \
+            "fluxbox" "Highly configurable and low resource window manager" \
+            "lxde" "Light-weight and fast window manager" \
+            3>&1 1>&2 2>&3)
+
+        if [ $? -eq 0 ]; then
+            case $window_manager in
+                "openbox")
+                    PACKAGES+=("openbox")
+                    ;;
+                "fluxbox")
+                    PACKAGES+=("fluxbox")
+                    ;;
+                "lxde")
+                    PACKAGES+=("lxde" "lightdm")
+                    ;;
+            esac
+        fi
+    else
+        echo 
+        echo "Window Manager Selection"
+        echo "========================"
+        echo 
+        echo "Choose your window manager:"
+        echo "  1) openbox - Standards-compliant, fast, light-weight and extensible window manager"
+        echo "  2) fluxbox - Highly configurable and low resource window manager"
+        echo "  3) lxde    - Light-weight and fast window manager"
+        echo -n "Enter your choice: "
+        while true; do
+            read -n 1 -s window_manager;
+            case $window_manager in
+                1)
+                    PACKAGES+=("openbox")
+                    break;;
+                2)
+                    PACKAGES+=("fluxbox")
+                    break;;
+                3)
+                    PACKAGES+=("lxde" "lightdm")
+                    break;;
+            esac
+        done
+    fi
+
     # Bigger image size
     IMAGE_SIZE=$(( IMAGE_SIZE + 400 ))
 }
@@ -426,7 +472,7 @@ else
     echo -n "Enter your choice: "
     while true; do
         read -n 1 -s SUITE;
-        case $debian_release in
+        case $SUITE in
             1)
                 echo "${SUITE}"
                 SUITE="wheezy"
