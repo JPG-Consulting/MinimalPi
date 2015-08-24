@@ -683,7 +683,7 @@ if [ \$? -ne 0 ]; then
     echo \"Error: Failed to create user ${USER_USERNAME}\"
     exit 1
 fi
-echo -e \"${USER_PASSWORD}\n${USER_PASSWORD}\n\" | passwd ${USER_USERNAME}
+echo -e \"${USER_PASSWORD}\n${USER_PASSWORD}\" | passwd ${USER_USERNAME}
 EOF
 
 #--------------------------------------------------------------------
