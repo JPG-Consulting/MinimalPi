@@ -690,8 +690,11 @@ if [ \$? -ne 0 ]; then
 fi
 echo -e \"${USER_PASSWORD}\n${USER_PASSWORD}\" | passwd ${USER_USERNAME}
 if [ \$? -ne 0 ]; then
-    echo \"Error: Failed set password for user ${USER_USERNAME}\"
-    exit 1
+    usermod --password=${USER_PASSWORD} ${USER_USERNAME}
+    if [ \$? -ne 0 ]; then
+        echo \"Error: Failed set password for user ${USER_USERNAME}\"
+        exit 1
+    fi
 fi
 EOF
 
