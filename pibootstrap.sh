@@ -913,7 +913,7 @@ auto eth0
 iface eth0 inet static
   address ${NETWORK_IPADDRESS}
   netmask ${NETWORK_NETMASK}
-  gatewy ${NETWORK_GATEWAY}
+  gateway ${NETWORK_GATEWAY}
 EOF
 fi
 
