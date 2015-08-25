@@ -84,6 +84,33 @@ function prompt_yesno() {
 	done
 }
 
+#----------------------------------------------------
+# Test an IP address for validity:
+# Usage:
+#      is_valid_ip IP_ADDRESS
+#      if [[ $? -eq 0 ]]; then echo good; else echo bad; fi
+#   OR
+#      if is_valid_ip IP_ADDRESS; then echo good; else echo bad; fi
+#
+# Source: http://www.linuxjournal.com/content/validating-ip-address-bash-script
+#----------------------------------------------------
+function is_valid_ip()
+{
+    local  ip=$1
+    local  stat=1
+
+    if [[ $ip =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        OIFS=$IFS
+        IFS='.'
+        ip=($ip)
+        IFS=$OIFS
+        [[ ${ip[0]} -le 255 && ${ip[1]} -le 255 \
+            && ${ip[2]} -le 255 && ${ip[3]} -le 255 ]]
+        stat=$?
+    fi
+    return $stat
+}
+
 function image_losetup() {
     if [ -n "${IMAGE_FILE}" ]; then
         if [ -z "${TARGET_DEVICE}" ]; then
@@ -306,33 +333,6 @@ function is_host_arm() {
         return 0 # true
     else
         return 1 # false
-    fi
-}
-
-function set_static_ipaddress() {
-    if [ -n "$DIALOG" ]; then
-        NETWORK_IPADDRESS=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
-Please enter the IP address for this system.\n\n\
-IP Address:
-" 20 60 "" 3>&1 1>&2 2>&3)
-
-        NETWORK_NETMASK=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
-Please enter the netmask.\n\n\
-Netmask:
-" 20 60 "" 3>&1 1>&2 2>&3)
-
-        NETWORK_GATEWAY=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "\
-Please enter the gateway address.\n\n\
-Gateway:
-" 20 60 "" 3>&1 1>&2 2>&3)
-    else
-        echo
-        echo "Network Settings"
-        echo "================"
-        echo
-        read -p "IP Address: " NETWORK_IPADDRESS
-        read -p "Netmask: " NETWORK_NETMASK
-        read -p "Gateway: " NETWORK_GATEWAY
     fi
 }
 
@@ -565,14 +565,69 @@ if [ -n "${DIALOG}" ]; then
     if [ $? -eq 0 ]; then
         PACKAGES+=( "isc-dhcp-client" )
     else
-        set_static_ipaddress
+        while true; do
+            NETWORK_IPADDRESS=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "Please enter the IP address for this system.\n\nIP Address:" 20 60 "" 3>&1 1>&2 2>&3)
+            if is_valid_ip NETWORK_IPADDRESS; then
+                break
+            else
+                ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Invalid IP address. Please try again." 20 70 1
+            fi
+        done
+
+        while true; do
+            NETWORK_NETMASK=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "Please enter the netmask.\n\nNetmask:" 20 60 "" 3>&1 1>&2 2>&3)
+            if is_valid_ip NETWORK_NETMASK; then
+                break
+            else
+                ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Invalid netmask. Please try again." 20 70 1
+            fi
+        done
+
+        while true; do
+            NETWORK_GATEWAY=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "Please enter the gateway address.\n\nGateway:" 20 60 "" 3>&1 1>&2 2>&3)
+            if is_valid_ip NETWORK_GATEWAY; then
+                break
+            else
+                ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Invalid gateway address. Please try again." 20 70 1
+            fi
+        done
     fi
 else
     echo 
     if prompt_yesno "Use DHCP to configure your network" y; then
         PACKAGES+=( "isc-dhcp-client" )
     else
-        set_static_ipaddress
+        echo
+        echo "Network Settings"
+        echo "================"
+        echo
+
+        while true; do
+            read -p "IP Address: " NETWORK_IPADDRESS
+            if is_valid_ip NETWORK_IPADDRESS; then
+                break
+            else
+                echo "Error: Invalid IP address. Please try again."
+            fi
+        done
+
+        while true; do
+            read -p "Netmask: " NETWORK_NETMASK
+            if is_valid_ip NETWORK_NETMASK; then
+                break
+            else
+                echo "Error: Invalid netmask. Please try again."
+            fi
+        done
+
+        while true; do
+            read -p "Gateway: " NETWORK_GATEWAY
+            if is_valid_ip NETWORK_GATEWAY; then
+                break
+            else
+                echo "Error: Invalid gateway address. Please try again."
+            fi
+        done
     fi
 fi
 
