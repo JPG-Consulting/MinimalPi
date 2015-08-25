@@ -16,6 +16,12 @@ if [ -z "${DIALOG}" ]; then
 fi
 
 #--------------------------------------------------------------------
+# Disable autologin
+#--------------------------------------------------------------------
+sed -e 's/^#1:2345:respawn:\/sbin\/getty /1:2345:respawn:\/sbin\/getty /' -i /etc/inittab
+sed '/1:2345:respawn:\/bin\/login -f root tty1 <\/dev\/tty1 >\/dev\/tty1 2>&1/d' -i /etc/inittab
+
+#--------------------------------------------------------------------
 # Enable Display Manager
 #--------------------------------------------------------------------
 DM="slim lightdm xdm gdm lxdm"
