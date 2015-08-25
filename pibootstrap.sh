@@ -348,7 +348,7 @@ function install_desktop_environment() {
         if [ $? -eq 0 ]; then
             case $window_manager in
                 "openbox")
-                    PACKAGES+=("openbox")
+                    PACKAGES+=("openbox" "slim")
                     ;;
                 "fluxbox")
                     PACKAGES+=("fluxbox")
@@ -372,7 +372,7 @@ function install_desktop_environment() {
             read -n 1 -s window_manager;
             case $window_manager in
                 1)
-                    PACKAGES+=("openbox")
+                    PACKAGES+=("openbox" "slim")
                     break;;
                 2)
                     PACKAGES+=("fluxbox")
@@ -385,7 +385,7 @@ function install_desktop_environment() {
     fi
 
     # Bigger image size
-    IMAGE_SIZE=$(( IMAGE_SIZE + 400 ))
+    IMAGE_SIZE=$(( IMAGE_SIZE + 500 ))
     # Change GPU_MEM
     GPU_MEM=64
 }
