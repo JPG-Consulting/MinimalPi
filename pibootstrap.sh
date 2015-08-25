@@ -348,7 +348,7 @@ function install_desktop_environment() {
         if [ $? -eq 0 ]; then
             case $window_manager in
                 "openbox")
-                    PACKAGES+=("openbox" "slim")
+                    PACKAGES+=("openbox")
                     ;;
                 "fluxbox")
                     PACKAGES+=("fluxbox")
@@ -375,7 +375,7 @@ function install_desktop_environment() {
                     PACKAGES+=("openbox" "slim")
                     break;;
                 2)
-                    PACKAGES+=("fluxbox")
+                    PACKAGES+=("fluxbox" "slim")
                     break;;
                 3)
                     PACKAGES+=("lxde" "lightdm")
