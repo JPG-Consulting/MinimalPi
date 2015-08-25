@@ -796,6 +796,22 @@ else
 fi
 
 #--------------------------------------------------------------------
+# Install initial setup script?
+#--------------------------------------------------------------------
+INITIAL_SETUP=1
+if [ -n "${DIALOG}" ]; then
+    ${DIALOG} --backtitle "${BACKTITLE}" --title "Setup script" --yesno "Do you wish to install the initial setup script?" 20 60 2 
+    if [ $? -eq 0 ]; then
+        INITIAL_SETUP=0
+    fi
+else
+    echo 
+    if prompt_yesno "Use DHCP to configure your network" y; then
+        INITIAL_SETUP=0
+    fi
+fi
+
+#--------------------------------------------------------------------
 # Create the image
 #--------------------------------------------------------------------
 IMAGE_FILE="${BUILD_DIRECTORY}/$(date +%Y-%m-%d)-minimalpi-${SUITE}.img"
@@ -1106,6 +1122,31 @@ if [ -e ${CHROOT_DIR}/usr/bin/qemu-arm-static ]; then
         else
             echo "Warning: Unable to delete ${CHROOT_DIR}/usr/bin/qemu-arm-static."
         fi
+    fi
+fi
+
+#--------------------------------------------------------------------
+# Install initial setup script
+#--------------------------------------------------------------------
+if [ $INITIAL_SETUP -eq 0 ]; then
+    wget --no-cache https://raw.githubusercontent.com/JPG-Consulting/MinimalPi/master/scripts/setup -O ${CHROOT_DIR}/root/setup
+    if [ $? -eq 0 ]; then
+        chmod +x ${CHROOT_DIR}/root/setup
+
+        cat <<EOF > ${CHROOT_DIR}/etc/profile.d/minimalpi-setup.sh
+#!/bin/sh
+    
+if [ \$(id -u) -ne 0 ]; then
+    printf "\nNOTICE: the software on this Raspberry Pi has not been fully configured. Please run 'sudo raspi-config'\n\n"
+else
+    rm /etc/profile.d/minimalpi-setup.sh
+    /root/setup
+    exec login -f pi
+fi
+EOF
+
+        # Auto-login as root
+        sed -e "s/1:2345:respawn:\/sbin\/getty 38400 tty1/1:2345:respawn:\/bin\/login -f root tty1 <\/dev\/tty1 >\/dev\/tty1 2>\&1/" -i ${CHROOT_DIR}/etc/inittab
     fi
 fi
 
