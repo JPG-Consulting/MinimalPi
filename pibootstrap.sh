@@ -567,7 +567,7 @@ if [ -n "${DIALOG}" ]; then
     else
         while true; do
             NETWORK_IPADDRESS=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "Please enter the IP address for this system.\n\nIP Address:" 20 60 "" 3>&1 1>&2 2>&3)
-            if is_valid_ip NETWORK_IPADDRESS; then
+            if is_valid_ip ${NETWORK_IPADDRESS}; then
                 break
             else
                 ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Invalid IP address. Please try again." 20 70 1
@@ -576,7 +576,7 @@ if [ -n "${DIALOG}" ]; then
 
         while true; do
             NETWORK_NETMASK=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "Please enter the netmask.\n\nNetmask:" 20 60 "" 3>&1 1>&2 2>&3)
-            if is_valid_ip NETWORK_NETMASK; then
+            if is_valid_ip ${NETWORK_NETMASK}; then
                 break
             else
                 ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Invalid netmask. Please try again." 20 70 1
@@ -585,7 +585,7 @@ if [ -n "${DIALOG}" ]; then
 
         while true; do
             NETWORK_GATEWAY=$(${DIALOG} --backtitle "${BACKTITLE}" --inputbox "Please enter the gateway address.\n\nGateway:" 20 60 "" 3>&1 1>&2 2>&3)
-            if is_valid_ip NETWORK_GATEWAY; then
+            if is_valid_ip ${NETWORK_GATEWAY}; then
                 break
             else
                 ${DIALOG} --backtitle "${BACKTITLE}" --title "Error" --msgbox "Invalid gateway address. Please try again." 20 70 1
@@ -604,7 +604,7 @@ else
 
         while true; do
             read -p "IP Address: " NETWORK_IPADDRESS
-            if is_valid_ip NETWORK_IPADDRESS; then
+            if is_valid_ip ${NETWORK_IPADDRESS}; then
                 break
             else
                 echo "Error: Invalid IP address. Please try again."
@@ -613,7 +613,7 @@ else
 
         while true; do
             read -p "Netmask: " NETWORK_NETMASK
-            if is_valid_ip NETWORK_NETMASK; then
+            if is_valid_ip ${NETWORK_NETMASK}; then
                 break
             else
                 echo "Error: Invalid netmask. Please try again."
@@ -622,7 +622,7 @@ else
 
         while true; do
             read -p "Gateway: " NETWORK_GATEWAY
-            if is_valid_ip NETWORK_GATEWAY; then
+            if is_valid_ip ${NETWORK_GATEWAY}; then
                 break
             else
                 echo "Error: Invalid gateway address. Please try again."
