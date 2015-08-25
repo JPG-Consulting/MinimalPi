@@ -81,18 +81,19 @@ if [ "$PART_NUM" -ne 2 ]; then
     exit 1
 fi
 
-LAST_PART_NUM=$(parted /dev/mmcblk0 -ms unit s p | tail -n 1 | cut -f 1 -d:)
-if [ "$LAST_PART_NUM" != "$PART_NUM" ]; then
-    if [ -n "${DIALOG}" ]; then
-        ${DIALOG} --msgbox "/dev/root is not the last partition. Don't know how to expand" 20 60 2
-    else
-        echo "Error: /dev/root is not the last partition. Don't know how to expand."
-    fi
-    return 0
-fi
+# NOTE: Commented out as we don't want to install parted and we assume it is our image
+#LAST_PART_NUM=$(parted /dev/mmcblk0 -ms unit s p | tail -n 1 | cut -f 1 -d:)
+#if [ "$LAST_PART_NUM" != "$PART_NUM" ]; then
+#    if [ -n "${DIALOG}" ]; then
+#        ${DIALOG} --msgbox "/dev/root is not the last partition. Don't know how to expand" 20 60 2
+#    else
+#        echo "Error: /dev/root is not the last partition. Don't know how to expand."
+#    fi
+#    exit 1
+#fi
 
 # Get the starting offset of the root partition
-PART_START=$(fdisk -a /dev/mmcblk0 | grep "^/dev/mmcblk0p${PART_NUM}" | awk '{print $2}')
+PART_START=$(fdisk -l /dev/mmcblk0 | grep "^/dev/mmcblk0p${PART_NUM}" | awk '{print $2}')
 
 # Return value will likely be error for fdisk as it fails to reload the
 # partition table because the root fs is mounted
