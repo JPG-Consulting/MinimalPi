@@ -16,6 +16,17 @@ if [ -z "${DIALOG}" ]; then
 fi
 
 #--------------------------------------------------------------------
+# Enable Display Manager
+#--------------------------------------------------------------------
+DM="slim lightdm xdm gdm lxdm"
+for i in $DM ; do 
+    if [ -f /etc/init.d/$i ] ; then 
+        update-rc.d $i enabled
+        break
+    fi 
+done
+
+#--------------------------------------------------------------------
 # Expand root filesystem
 #--------------------------------------------------------------------
 if ! [ -h /dev/root ]; then
