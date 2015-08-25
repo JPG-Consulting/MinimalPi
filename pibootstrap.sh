@@ -1146,7 +1146,7 @@ fi
 EOF
 
         # Auto-login as root
-        sed -e "s/1:2345:respawn:\/sbin\/getty 38400 tty1/1:2345:respawn:\/bin\/login -f root tty1 <\/dev\/tty1 >\/dev\/tty1 2>\&1/" -i ${CHROOT_DIR}/etc/inittab
+        sed -e "s/1:2345:respawn:\/sbin\/getty 38400 tty1/1:2345:respawn:\/bin\/login -f root tty1 <\/dev\/tty1 >\/dev\/tty1 2>\&1\n#1:2345:respawn:\/sbin\/getty 38400 tty1/" -i ${CHROOT_DIR}/etc/inittab
     fi
 fi
 
