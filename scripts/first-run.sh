@@ -21,7 +21,7 @@ fi
 DM="slim lightdm xdm gdm lxdm"
 for i in $DM ; do 
     if [ -f /etc/init.d/$i ] ; then 
-        update-rc.d $i enabled
+        update-rc.d $i enable
         break
     fi 
 done
