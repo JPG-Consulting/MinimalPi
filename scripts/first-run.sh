@@ -26,7 +26,8 @@ sed '/1:2345:respawn:\/bin\/login -f root tty1 <\/dev\/tty1 >\/dev\/tty1 2>&1/d'
 #--------------------------------------------------------------------
 DM="slim lightdm xdm gdm lxdm"
 for i in $DM ; do 
-    if [ -f /etc/init.d/$i ] ; then 
+    if [ -f /etc/init.d/$i ] ; then
+        echo "Enabled X display manager: $i"
         update-rc.d $i enable
         break
     fi 
@@ -35,6 +36,7 @@ done
 #--------------------------------------------------------------------
 # Expand root filesystem
 #--------------------------------------------------------------------
+echo "Expanding root file system."
 if ! [ -h /dev/root ]; then
     if [ -n "${DIALOG}" ]; then
         ${DIALOG} --msgbox "/dev/root does not exist or is not a symlink. Don't know how to expand" 20 60 2
@@ -81,7 +83,7 @@ PART_START=$(fdisk -a /dev/mmcblk0 | grep "^/dev/mmcblk0p${PART_NUM}" | awk '{pr
 
 # Return value will likely be error for fdisk as it fails to reload the
 # partition table because the root fs is mounted
-fdisk /dev/mmcblk0 <<EOF
+fdisk /dev/mmcblk0 <<EOF >& /dev/null
 p
 d
 $PART_NUM
